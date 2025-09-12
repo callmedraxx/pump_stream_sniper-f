@@ -173,6 +173,10 @@ export default function Page() {
     sortOrder: 'desc',  // Default: highest first
     dataTimePeriod: '24h'
   })
+  // Ref to temporarily suppress incoming updates (poll/SSE) right after user changes sort
+  const suppressUpdatesRef = useRef<boolean>(false)
+  // Store latest incoming data while updates are suppressed so we can apply it once
+  const latestIncomingDataRef = useRef<LiveToken[] | null>(null)
 
   // Pagination state
   const [currentPage, setCurrentPage] = useState<number>(1)
@@ -233,15 +237,45 @@ export default function Page() {
     }
   }, [persistentSort.sortBy, persistentSort.sortOrder, persistentSort.dataTimePeriod])
 
-  // Save persistent sort to localStorage
+  // Save persistent sort to localStorage and immediately apply it
   const saveSortPreferences = (newSortBy: string, newSortOrder: 'asc' | 'desc', newDataTimePeriod: string) => {
     const sortPrefs = {
       sortBy: newSortBy,
       sortOrder: newSortOrder,
       dataTimePeriod: newDataTimePeriod
     }
+
+    // Persist preference
     setPersistentSort(sortPrefs)
-    localStorage.setItem('tokenTableSort', JSON.stringify(sortPrefs))
+    try {
+      localStorage.setItem('tokenTableSort', JSON.stringify(sortPrefs))
+    } catch (e) {
+      console.warn('Failed to save sort preferences to localStorage', e)
+    }
+
+    // Immediately apply the new sort to the current tokens using the explicit prefs
+    setLiveTokens(prevTokens => sortTokens(prevTokens, sortPrefs))
+
+    // Temporarily suppress incoming updates to avoid race conditions where a poll/SSE
+    // update arrives immediately and overwrites the user's selection.
+    suppressUpdatesRef.current = true
+    setTimeout(() => {
+      suppressUpdatesRef.current = false
+      console.log('🔓 Re-enabled incoming updates after user sort')
+      // If there was an incoming update while we suppressed, apply it now
+      if (latestIncomingDataRef.current) {
+        const incoming = latestIncomingDataRef.current
+        latestIncomingDataRef.current = null
+        setLiveTokens(prev => {
+          if (prev.length === 0) {
+            return sortTokens(incoming)
+          }
+          const processed = updateChangedTokens(prev, incoming)
+          return sortTokens(processed)
+        })
+        console.log('📥 Applied deferred incoming update after user sort')
+      }
+    }, 500) // 500ms should be enough to avoid immediate race
   }
 
   // Helper function to parse formatted age strings like "5m ago", "2h ago", "3d ago" into timestamps
@@ -699,22 +733,28 @@ export default function Page() {
 
             if (data.event === 'live_tokens_update' && data.data && data.data.length > 0) {
               // Use smart update to only change what's different and maintain sorting
-              setLiveTokens(prevTokens => {
-                let processedTokens: LiveToken[]
+              if (suppressUpdatesRef.current) {
+                // Store incoming update for later application
+                latestIncomingDataRef.current = data.data
+                console.log('⏸️ Suppressing incoming update while user changed sort; stored for later')
+              } else {
+                setLiveTokens(prevTokens => {
+                  let processedTokens: LiveToken[]
 
-                if (prevTokens.length === 0) {
-                  // First load
-                  processedTokens = data.data
-                  console.log(`📊 First load: ${processedTokens.length} tokens`)
-                } else {
-                  // Update existing tokens while preserving changes
-                  processedTokens = updateChangedTokens(prevTokens, data.data)
-                  console.log(`🔄 Updated tokens: ${processedTokens.length} total`)
-                }
+                  if (prevTokens.length === 0) {
+                    // First load
+                    processedTokens = data.data
+                    console.log(`📊 First load: ${processedTokens.length} tokens`)
+                  } else {
+                    // Update existing tokens while preserving changes
+                    processedTokens = updateChangedTokens(prevTokens, data.data)
+                    console.log(`🔄 Updated tokens: ${processedTokens.length} total`)
+                  }
 
-                // Always apply current sort to ensure consistency
-                return sortTokens(processedTokens)
-              })
+                  // Always apply current sort to ensure consistency
+                  return sortTokens(processedTokens)
+                })
+              }
 
               setLastUpdate(new Date(data.timestamp).toLocaleString())
               setConnectionStatus('connected')
@@ -742,52 +782,52 @@ export default function Page() {
 
 
   // Unified function to sort tokens based on current sort criteria
-  const sortTokens = useCallback((tokens: LiveToken[]): LiveToken[] => {
+  const sortTokens = useCallback((tokens: LiveToken[], overridePrefs?: { sortBy: string; sortOrder: 'asc' | 'desc'; dataTimePeriod: string }): LiveToken[] => {
     if (tokens.length === 0) return tokens
+    const prefs = overridePrefs || persistentSort
 
     let sortedTokens: LiveToken[]
 
-    switch (persistentSort.sortBy) {
+    switch (prefs.sortBy) {
       case 'age':
-        sortedTokens = sortByAge(tokens, persistentSort.sortOrder)
+        sortedTokens = sortByAge(tokens, prefs.sortOrder)
         break
       case 'mcap':
-        sortedTokens = sortByMarketCap(tokens, persistentSort.sortOrder)
+        sortedTokens = sortByMarketCap(tokens, prefs.sortOrder)
         break
       case 'ath':
-        sortedTokens = sortByATH(tokens, persistentSort.sortOrder)
+        sortedTokens = sortByATH(tokens, prefs.sortOrder)
         break
       case 'volume':
-        sortedTokens = sortByVolume(tokens, persistentSort.sortOrder, persistentSort.dataTimePeriod)
+        sortedTokens = sortByVolume(tokens, prefs.sortOrder, prefs.dataTimePeriod)
         break
       case 'txns':
-        sortedTokens = sortByTransactions(tokens, persistentSort.sortOrder, persistentSort.dataTimePeriod)
+        sortedTokens = sortByTransactions(tokens, prefs.sortOrder, prefs.dataTimePeriod)
         break
       case 'traders':
-        sortedTokens = sortByTraders(tokens, persistentSort.sortOrder, persistentSort.dataTimePeriod)
+        sortedTokens = sortByTraders(tokens, prefs.sortOrder, prefs.dataTimePeriod)
         break
       case 'price_change':
-        sortedTokens = sortByPriceChange(tokens, persistentSort.sortOrder, persistentSort.dataTimePeriod)
+        sortedTokens = sortByPriceChange(tokens, prefs.sortOrder, prefs.dataTimePeriod)
         break
       case 'viewers':
-        sortedTokens = sortByViewers(tokens, persistentSort.sortOrder)
+        sortedTokens = sortByViewers(tokens, prefs.sortOrder)
         break
       case 'creator':
-        sortedTokens = sortByCreator(tokens, persistentSort.sortOrder)
+        sortedTokens = sortByCreator(tokens, prefs.sortOrder)
         break
       case 'symbol':
-        sortedTokens = sortBySymbol(tokens, persistentSort.sortOrder)
+        sortedTokens = sortBySymbol(tokens, prefs.sortOrder)
         break
       case 'trending':
-        sortedTokens = sortByTrending(tokens, persistentSort.dataTimePeriod)
+        sortedTokens = sortByTrending(tokens, prefs.dataTimePeriod)
         break
       default:
         sortedTokens = sortByMarketCap(tokens, 'desc') // Default fallback: market cap highest first
     }
 
-    //console.log(`🔄 Sorted ${sortedTokens.length} tokens by ${persistentSort.sortBy} (${persistentSort.sortOrder}) for ${persistentSort.dataTimePeriod}`)
     return sortedTokens
-  }, [persistentSort.sortBy, persistentSort.sortOrder, persistentSort.dataTimePeriod])
+  }, [persistentSort])
 
   // Page visibility state for optimizing polling
   const [isPageVisible, setIsPageVisible] = useState(true)
