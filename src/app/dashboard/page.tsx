@@ -601,10 +601,9 @@ export default function Page() {
                   const data = JSON.parse(jsonStr)
 
                   if (data.event === 'tokens_update' && data.data?.tokens) {
-                    //console.log(`📊 Received ${data.data.tokens.length} tokens from SSE stream`)
-
-                    // Immediately poll for updated tokens when SSE data arrives
-                    pollTokensFromAPI()
+                    // SSE indicates tokens have been updated, but we don't need to poll
+                    // since the main update comes through the 'live_tokens_update' event
+                    console.log(`📡 SSE heartbeat: ${data.data.tokens.length} tokens available`)
                   }
                 } catch (parseError) {
                   console.warn('Failed to parse SSE data:', parseError)
@@ -665,8 +664,7 @@ export default function Page() {
     //console.log('🔄 Manual reconnection triggered')
     setReconnectAttempts(0)
     await establishSSEConnection()
-    // Also trigger an immediate API poll
-    await pollTokensFromAPI()
+    // establishSSEConnection will handle getting the latest data
   }
 
   // Enhanced polling for Vercel serverless compatibility
@@ -703,17 +701,17 @@ export default function Page() {
                 let processedTokens: LiveToken[]
 
                 if (prevTokens.length === 0) {
-                  // First load
-                  processedTokens = data.data
+                  // First load - apply current sort
+                  processedTokens = sortTokens(data.data)
                   console.log(`📊 First load: ${processedTokens.length} tokens`)
                 } else {
-                  // Update existing tokens while preserving changes
+                  // Update existing tokens while preserving sorted order
                   processedTokens = updateChangedTokens(prevTokens, data.data)
                   console.log(`🔄 Updated tokens: ${processedTokens.length} total`)
                 }
 
-                // Always apply current sort to ensure consistency
-                return sortTokens(processedTokens)
+                // updateChangedTokens already returns properly sorted tokens
+                return processedTokens
               })
 
               setLastUpdate(new Date(data.timestamp).toLocaleString())
@@ -804,13 +802,19 @@ export default function Page() {
     return () => document.removeEventListener('visibilitychange', handleVisibilityChange)
   }, [])
 
-  // Update polling interval based on page visibility
+  // Update polling interval based on page visibility and SSE connection status
   useEffect(() => {
     if (pollingIntervalRef.current) {
       clearInterval(pollingIntervalRef.current)
     }
 
-    // More aggressive polling for Vercel serverless environment
+    // Disable polling if SSE is connected to prevent conflicts
+    if (isConnected) {
+      console.log('🔌 SSE connected, disabling polling to prevent conflicts')
+      return
+    }
+
+    // More aggressive polling for Vercel serverless environment (only when SSE is not connected)
     const isVercel = typeof window !== 'undefined' && window.location.hostname.includes('vercel.app')
     const interval = isPageVisible
       ? (isVercel ? 150 : 200)  // Even more aggressive on Vercel
@@ -826,7 +830,7 @@ export default function Page() {
         clearInterval(pollingIntervalRef.current)
       }
     }
-  }, [isPageVisible, isLoading])
+  }, [isPageVisible, isLoading, isConnected])
 
   
 
