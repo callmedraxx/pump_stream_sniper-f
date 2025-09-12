@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState, useRef } from "react"
+import { useEffect, useState, useRef, useCallback } from "react"
 import Image from "next/image"
 import { AppSidebar } from "@/components/app-sidebar"
 import { SiteHeader } from "@/components/site-header"
@@ -225,25 +225,13 @@ export default function Page() {
     return `$${value.toFixed(0)}`
   }
 
-  // Load persistent sort from localStorage on mount
+  // Ensure sorting is maintained whenever sort preferences change
   useEffect(() => {
-    const savedSort = localStorage.getItem('tokenTableSort')
-    if (savedSort) {
-      try {
-        const parsed = JSON.parse(savedSort)
-        setPersistentSort(parsed)
-        setDataTimePeriod(parsed.dataTimePeriod)
-        // Update UI selection if it matches a time period
-        if (['5m', '1h', '6h', '24h'].includes(parsed.dataTimePeriod)) {
-          setUiSelection(parsed.dataTimePeriod)
-        } else if (parsed.sortBy === 'trending') {
-          setUiSelection('trending')
-        }
-      } catch (error) {
-        console.error('Error loading saved sort preferences:', error)
-      }
+    if (liveTokens.length > 0) {
+      console.log(`🔄 Re-applying sort: ${persistentSort.sortBy} ${persistentSort.sortOrder}`)
+      setLiveTokens(prevTokens => sortTokens(prevTokens))
     }
-  }, [])
+  }, [persistentSort.sortBy, persistentSort.sortOrder, persistentSort.dataTimePeriod])
 
   // Save persistent sort to localStorage
   const saveSortPreferences = (newSortBy: string, newSortOrder: 'asc' | 'desc', newDataTimePeriod: string) => {
@@ -754,7 +742,7 @@ export default function Page() {
 
 
   // Unified function to sort tokens based on current sort criteria
-  const sortTokens = (tokens: LiveToken[]): LiveToken[] => {
+  const sortTokens = useCallback((tokens: LiveToken[]): LiveToken[] => {
     if (tokens.length === 0) return tokens
 
     let sortedTokens: LiveToken[]
@@ -799,7 +787,7 @@ export default function Page() {
 
     //console.log(`🔄 Sorted ${sortedTokens.length} tokens by ${persistentSort.sortBy} (${persistentSort.sortOrder}) for ${persistentSort.dataTimePeriod}`)
     return sortedTokens
-  }
+  }, [persistentSort.sortBy, persistentSort.sortOrder, persistentSort.dataTimePeriod])
 
   // Page visibility state for optimizing polling
   const [isPageVisible, setIsPageVisible] = useState(true)
@@ -842,17 +830,19 @@ export default function Page() {
 
   
 
-  // Function to update only changed tokens
+  // Function to update only changed tokens while preserving sorted order
   const updateChangedTokens = (existingTokens: LiveToken[], newTokens: LiveToken[]): LiveToken[] => {
     const existingMap = new Map(existingTokens.map(token => [token.token_info.mint, token]))
+    const newTokensMap = new Map(newTokens.map(token => [token.token_info.mint, token]))
     const updatedTokens: LiveToken[] = []
     let changedCount = 0
 
-    for (const newToken of newTokens) {
-      const mint = newToken.token_info.mint
-      const existingToken = existingMap.get(mint)
+    // First, update all existing tokens in their current sorted order
+    for (const existingToken of existingTokens) {
+      const mint = existingToken.token_info.mint
+      const newToken = newTokensMap.get(mint)
 
-      if (existingToken) {
+      if (newToken) {
         // Compare key fields to see if anything changed
         const hasChanged = compareTokens(existingToken, newToken)
 
@@ -898,17 +888,33 @@ export default function Page() {
           })
         }
       } else {
-        // New token
+        // Token no longer exists in new data, keep it for now
         updatedTokens.push({
-          ...newToken,
-          _isUpdated: true,
-          _updatedAt: Date.now()
+          ...existingToken,
+          _isUpdated: false
         })
-        changedCount++
       }
     }
 
-    console.log(`🔄 Token comparison: ${changedCount} changed out of ${newTokens.length} total`)
+    // Then add any completely new tokens in the correct sorted position
+    const newTokensToAdd = newTokens.filter(newToken => !existingMap.has(newToken.token_info.mint))
+
+    if (newTokensToAdd.length > 0) {
+      // Create a combined list with existing tokens and new tokens
+      const allTokens = [...updatedTokens, ...newTokensToAdd.map(token => ({
+        ...token,
+        _isUpdated: true,
+        _updatedAt: Date.now()
+      }))]
+
+      // Re-sort the entire list to ensure proper ordering
+      const resortedTokens = sortTokens(allTokens)
+
+      console.log(`🔄 Added ${newTokensToAdd.length} new tokens, resorted ${resortedTokens.length} total`)
+      return resortedTokens
+    }
+
+    console.log(`🔄 Token comparison: ${changedCount} changed, order preserved`)
     return updatedTokens
   }
 
