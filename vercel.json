@@ -1,11 +1,17 @@
 {
   "functions": {
     "src/app/api/**/*.ts": {
-      "maxDuration": 30
+      "maxDuration": 300
     }
   },
   "regions": ["iad1"],
   "buildCommand": "npm run build",
   "outputDirectory": ".next",
-  "framework": "nextjs"
+  "framework": "nextjs",
+  "rewrites": [
+    {
+      "source": "/api/livestreams",
+      "destination": "/api/livestreams"
+    }
+  ]
 }

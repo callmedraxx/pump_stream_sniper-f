@@ -360,12 +360,12 @@ export async function GET(request: NextRequest) {
 
         // Function removed - was not being used
 
-        // Connect to SSE with massive payload handling
+        // Connect to SSE with Vercel-compatible timeout handling
         const connectSSE = async () => {
           try {
             abortController = new AbortController();
-            //console.log('Connecting to backend SSE:', sseUrl);
-            
+            console.log('🔌 Establishing SSE connection to backend...');
+
             const response = await fetch(sseUrl, {
               method: 'GET',
               headers: {
@@ -385,13 +385,35 @@ export async function GET(request: NextRequest) {
             }
 
             const decoder = new TextDecoder();
-            //console.log('SSE connection established, preparing for large payload streaming...');
+            console.log('✅ SSE connection established, streaming data...');
 
             let fullEventBuffer = '';  // Buffer for complete SSE event
             let isInsideDataEvent = false;
             let eventStartTime = Date.now();
+            let lastHeartbeat = Date.now();
             const MAX_EVENT_SIZE = 50 * 1024 * 1024; // 50MB limit for safety
-            const TIMEOUT_MS = 60000; // 60 second timeout for complete event
+            const EVENT_TIMEOUT_MS = 60000; // 60 second timeout for complete event
+            const HEARTBEAT_INTERVAL = 30000; // Send heartbeat every 30 seconds
+            const CONNECTION_TIMEOUT = 270000; // 4.5 minutes (before Vercel's 5min limit)
+
+            // Heartbeat interval to keep connection alive
+            const heartbeatInterval = setInterval(() => {
+              if (!isClosed && !abortController?.signal.aborted) {
+                const now = Date.now();
+                if (now - lastHeartbeat > HEARTBEAT_INTERVAL) {
+                  console.log('💓 SSE heartbeat - connection active');
+                  lastHeartbeat = now;
+                }
+
+                // Check for Vercel timeout approaching
+                if (now - eventStartTime > CONNECTION_TIMEOUT) {
+                  console.log('⏰ Vercel timeout approaching, preparing graceful disconnect...');
+                  safeError(new Error('Vercel timeout approaching'));
+                  clearInterval(heartbeatInterval);
+                  return;
+                }
+              }
+            }, 10000); // Check every 10 seconds
 
             // Read the SSE stream with large payload support
             while (!isClosed && !abortController?.signal.aborted) {
@@ -442,7 +464,7 @@ export async function GET(request: NextRequest) {
                       }
 
                       // Timeout check
-                      if (Date.now() - eventStartTime > TIMEOUT_MS) {
+                      if (Date.now() - eventStartTime > EVENT_TIMEOUT_MS) {
                         console.error('❌ Event reception timeout, discarding partial event...');
                         fullEventBuffer = '';
                         isInsideDataEvent = false;

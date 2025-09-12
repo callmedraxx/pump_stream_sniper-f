@@ -156,7 +156,7 @@ function TokenImage({ src, alt, symbol }: TokenImageProps) {
 export default function Page() {
   const [liveTokens, setLiveTokens] = useState<LiveToken[]>([])
   const [isLoading, setIsLoading] = useState<boolean>(true)
-  const [connectionStatus, setConnectionStatus] = useState<'connecting' | 'connected' | 'error'>('connecting')
+  const [connectionStatus, setConnectionStatus] = useState<'connecting' | 'connected' | 'error' | 'reconnecting'>('connecting')
   const [lastUpdate, setLastUpdate] = useState<string>('')
 
   // Sorting state - using persistent sort instead of local state
@@ -535,7 +535,7 @@ export default function Page() {
   const [reconnectAttempts, setReconnectAttempts] = useState(0)
   const [sseConnection, setSseConnection] = useState<AbortController | null>(null)
 
-  // Function to establish persistent SSE connection
+  // Function to establish persistent SSE connection with Vercel timeout handling
   const establishSSEConnection = async (retryCount = 0) => {
     // Abort existing connection if any
     if (sseConnection) {
@@ -545,20 +545,42 @@ export default function Page() {
     const abortController = new AbortController()
     setSseConnection(abortController)
 
+    // Set up automatic reconnection timer for Vercel timeout
+    const vercelTimeoutMs = 240000 // 4 minutes (before Vercel's 5min limit)
+    const reconnectionTimer = setTimeout(() => {
+      if (!abortController.signal.aborted) {
+        console.log('⏰ Vercel timeout approaching, initiating graceful reconnection...')
+        abortController.abort()
+        // Reconnect after a short delay
+        setTimeout(() => {
+          if (!isPageVisible) return // Don't reconnect if page is hidden
+          console.log('🔄 Auto-reconnecting SSE after Vercel timeout...')
+          setConnectionStatus('reconnecting') // Show reconnection status
+          establishSSEConnection(retryCount)
+        }, 2000) // Wait 2 seconds before reconnecting
+      }
+    }, vercelTimeoutMs)
+
     try {
-      //console.log(`🚀 Establishing SSE connection (attempt ${retryCount + 1})`)
+      console.log(`🚀 Establishing SSE connection (attempt ${retryCount + 1})`)
       setConnectionStatus('connecting')
-      
+
       const response = await fetch('/api/livestreams', {
-        signal: abortController.signal
+        signal: abortController.signal,
+        headers: {
+          'Accept': 'text/event-stream',
+          'Cache-Control': 'no-cache'
+        }
       })
 
       if (!response.ok) {
+        clearTimeout(reconnectionTimer)
         throw new Error(`HTTP ${response.status}: ${response.statusText}`)
       }
 
       const reader = response.body?.getReader()
       if (!reader) {
+        clearTimeout(reconnectionTimer)
         throw new Error('No response body reader available')
       }
 
@@ -566,7 +588,9 @@ export default function Page() {
       setIsConnected(true)
       setConnectionStatus('connected')
       setReconnectAttempts(0)
-      //console.log('✅ SSE connection established')
+      console.log('✅ SSE connection established')
+
+      let connectionStartTime = Date.now()
 
       // Read the SSE stream continuously
       while (!abortController.signal.aborted) {
@@ -574,7 +598,7 @@ export default function Page() {
           const { done, value } = await reader.read()
 
           if (done) {
-            //console.log('📡 SSE stream ended')
+            console.log('📡 SSE stream ended normally')
             break
           }
 
@@ -608,19 +632,22 @@ export default function Page() {
         }
       }
     } catch (error: unknown) {
+      // Clear the reconnection timer
+      clearTimeout(reconnectionTimer)
+
       if (!abortController.signal.aborted) {
         console.error('❌ SSE connection error:', error)
         setConnectionStatus('error')
         setIsConnected(false)
-        
+
         // Implement exponential backoff for reconnection
         const maxRetries = 5
         const backoffDelay = Math.min(1000 * Math.pow(2, retryCount), 30000) // Max 30s
-        
+
         if (retryCount < maxRetries) {
-          //console.log(`🔄 Reconnecting in ${backoffDelay}ms (attempt ${retryCount + 1}/${maxRetries})`)
+          console.log(`🔄 Reconnecting in ${backoffDelay}ms (attempt ${retryCount + 1}/${maxRetries})`)
           setReconnectAttempts(retryCount + 1)
-          
+
           setTimeout(() => {
             establishSSEConnection(retryCount + 1)
           }, backoffDelay)
@@ -630,6 +657,9 @@ export default function Page() {
         }
       }
     } finally {
+      // Clear the reconnection timer
+      clearTimeout(reconnectionTimer)
+
       if (sseConnection === abortController) {
         setSseConnection(null)
       }
@@ -999,10 +1029,11 @@ export default function Page() {
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-4">
                   <Badge
-                    variant={connectionStatus === 'connected' ? 'default' : connectionStatus === 'error' ? 'destructive' : 'secondary'}
+                    variant={connectionStatus === 'connected' ? 'default' : connectionStatus === 'error' ? 'destructive' : connectionStatus === 'reconnecting' ? 'secondary' : 'secondary'}
                   >
                     {connectionStatus === 'connected' ? (isConnected ? '🟢 Live Stream' : '🟢 File Watching') :
-                     connectionStatus === 'error' ? `🔴 Error${reconnectAttempts > 0 ? ` (${reconnectAttempts}/5)` : ''}` : 
+                     connectionStatus === 'error' ? `🔴 Error${reconnectAttempts > 0 ? ` (${reconnectAttempts}/5)` : ''}` :
+                     connectionStatus === 'reconnecting' ? '🟡 Reconnecting...' :
                      '🟡 Connecting'}
                   </Badge>
                   <div className="flex items-center gap-2">
