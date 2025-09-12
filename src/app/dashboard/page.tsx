@@ -599,11 +599,11 @@ export default function Page() {
     await establishSSEConnection()
   }
 
-  // Function to load tokens from public tokens.json file
+  // Function to load tokens from API endpoint
   const loadTokensFromFile = async () => {
     try {
-      //console.log('📂 Loading tokens from public/tokens.json')
-      const response = await fetch('/tokens.json', {
+      //console.log('📂 Loading tokens from API endpoint')
+      const response = await fetch('/api/tokens', {
         cache: 'no-cache',
         headers: {
           'Cache-Control': 'no-cache'
@@ -612,7 +612,7 @@ export default function Page() {
 
       if (!response.ok) {
         if (response.status === 404) {
-          //console.log('📂 tokens.json not found, will create when livestream updates')
+          console.log('📂 No tokens data available yet, will load when available')
           return
         }
         throw new Error(`HTTP error! status: ${response.status}`)
@@ -707,7 +707,7 @@ export default function Page() {
   // Function to check for file updates
   const checkForFileUpdates = async () => {
     try {
-      const response = await fetch('/tokens.json', {
+      const response = await fetch('/api/tokens', {
         method: 'HEAD',
         cache: 'no-cache'
       })
@@ -794,7 +794,7 @@ export default function Page() {
       }
     }
 
-    //console.log(`🔄 Token comparison: ${changedCount} changed out of ${newTokens.length} total`)
+    console.log(`🔄 Token comparison: ${changedCount} changed out of ${newTokens.length} total`)
     return updatedTokens
   }
 

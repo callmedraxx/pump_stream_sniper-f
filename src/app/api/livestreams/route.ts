@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { promises as fs } from 'fs';
-import path from 'path';
+import { tokenStorage } from '@/lib/token-storage';
 
 export async function GET(request: NextRequest) {
   const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
@@ -18,21 +17,21 @@ export async function GET(request: NextRequest) {
   // Handle status check
   if (action === 'status') {
     try {
-      const tokensFilePath = path.join(process.cwd(), 'public', 'tokens.json');
-      const fileContent = await fs.readFile(tokensFilePath, 'utf-8');
-      const data = JSON.parse(fileContent);
+      const stats = tokenStorage.getStats();
+      const tokensData = tokenStorage.getTokens();
 
       return NextResponse.json({
         status: 'success',
-        file_exists: true,
-        token_count: data.token_count || 0,
-        last_updated: data.timestamp,
-        data_size: data.data?.length || 0
+        has_data: stats.hasData,
+        token_count: stats.tokenCount,
+        last_updated: stats.lastUpdate,
+        data_size: tokensData?.data?.length || 0,
+        storage_type: 'in-memory'
       });
     } catch (error) {
       return NextResponse.json({
         status: 'error',
-        file_exists: false,
+        has_data: false,
         error: error instanceof Error ? error.message : 'Unknown error'
       });
     }
@@ -41,10 +40,6 @@ export async function GET(request: NextRequest) {
   // Handle test data injection
   if (action === 'test') {
     try {
-      const publicDir = path.join(process.cwd(), 'public');
-      const tokensFilePath = path.join(publicDir, 'tokens.json');
-
-      await fs.mkdir(publicDir, { recursive: true });
 
       const testTokens = [
         {
@@ -85,10 +80,12 @@ export async function GET(request: NextRequest) {
         event: 'live_tokens_update',
         timestamp: new Date().toISOString(),
         token_count: testTokens.length,
-        data: testTokens
+        data: testTokens,
+        last_sse_update: new Date().toISOString(),
+        backend_total_count: testTokens.length
       };
 
-      await fs.writeFile(tokensFilePath, JSON.stringify(testData, null, 2));
+      tokenStorage.setTokens(testData);
 
       return NextResponse.json({
         status: 'success',
@@ -103,13 +100,19 @@ export async function GET(request: NextRequest) {
     }
   }
 
-  // Handle direct file access
+  // Handle direct data access
   if (action === 'file') {
     try {
-      const tokensFilePath = path.join(process.cwd(), 'public', 'tokens.json');
-      const fileContent = await fs.readFile(tokensFilePath, 'utf-8');
+      const tokensData = tokenStorage.getTokens();
+      
+      if (!tokensData) {
+        return NextResponse.json(
+          { error: 'No tokens data available' }, 
+          { status: 404 }
+        );
+      }
 
-      return new NextResponse(fileContent, {
+      return new NextResponse(JSON.stringify(tokensData), {
         headers: {
           'Content-Type': 'application/json',
           'Cache-Control': 'no-cache',
@@ -124,8 +127,7 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const tokensFilePath = path.join(process.cwd(), 'public', 'tokens.json');
-    await fs.mkdir(path.dirname(tokensFilePath), { recursive: true });
+    // No file system operations needed - using in-memory storage
 
     // Transform backend token format to LiveToken format
     const transformBackendToken = (backendToken: any) => {
@@ -555,12 +557,12 @@ export async function GET(request: NextRequest) {
                 backend_total_count: expectedCount || transformedTokens.length
               };
 
-              //console.log(`💾 Writing ${transformedTokens.length} tokens to file...`);
+              //console.log(`💾 Storing ${transformedTokens.length} tokens in memory...`);
               const writeStartTime = Date.now();
-              await fs.writeFile(tokensFilePath, JSON.stringify(completeData, null, 2));
+              tokenStorage.setTokens(completeData);
               const writeTime = Date.now() - writeStartTime;
               
-              //console.log(`🎉 Successfully updated tokens.json with ${transformedTokens.length} tokens (write: ${writeTime}ms)`);
+              //console.log(`🎉 Successfully updated in-memory storage with ${transformedTokens.length} tokens (store: ${writeTime}ms)`);
             } else {
               //console.log('ℹ️ Event does not contain token update data, ignoring...');
             }
