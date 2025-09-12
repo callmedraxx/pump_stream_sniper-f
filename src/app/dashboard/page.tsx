@@ -586,7 +586,7 @@ useEffect(() => {
           console.log('🔄 Auto-reconnecting SSE after Vercel timeout...')
           setConnectionStatus('reconnecting') // Show reconnection status
           establishSSEConnection(retryCount)
-        }, 2000) // Wait 2 seconds before reconnecting
+        }, 1000) // Wait 1 second before reconnecting
       }
     }, vercelTimeoutMs)
 
@@ -1070,7 +1070,7 @@ useEffect(() => {
           <div className="@container/main flex flex-1 flex-col gap-2">
             <div className="flex flex-col gap-4 py-4 md:gap-6 md:py-6 px-4">
               {/* Status Bar */}
-              <div className="flex items-center justify-between">
+              {/* <div className="flex items-center justify-between">
                 <div className="flex items-center gap-4">
                   <Badge
                     variant={connectionStatus === 'connected' ? 'default' : connectionStatus === 'error' ? 'destructive' : connectionStatus === 'reconnecting' ? 'secondary' : 'secondary'}
@@ -1097,7 +1097,7 @@ useEffect(() => {
                     )}
                   </div>
                 </div>
-              </div>
+              </div> */}
 
               {/* Time Period Selector */}
               <div className="flex items-center gap-4 p-3 bg-muted/30 rounded-lg border">
@@ -1133,9 +1133,9 @@ useEffect(() => {
                     <TabsTrigger value="trending">TRENDING</TabsTrigger>
                   </TabsList>
                 </Tabs>
-                <div className="text-sm text-muted-foreground">
+                {/* <div className="text-sm text-muted-foreground">
                   Current: {uiSelection === 'trending' ? 'Trending' : uiSelection.toUpperCase()} | Data: {dataTimePeriod.toUpperCase()}
-                </div>
+                </div> */}
               </div>
 
               {/* Enhanced Tokens Table with Fixed Token Column */}
@@ -1148,7 +1148,7 @@ useEffect(() => {
                       <thead className="sticky top-0 z-20 bg-background border-b backdrop-blur-sm">
                         <tr>
                           {/* Fixed Token Header */}
-                          <th className="sticky left-0 z-30 w-[240px] px-4 py-3 text-left text-xs font-semibold bg-background border-r shadow-sm">
+                          <th className="sticky left-0 z-30 w-[220px] px-4 py-3 text-left text-xs font-semibold bg-background border-r shadow-sm">
                             TOKEN
                           </th>
                           
