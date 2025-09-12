@@ -651,7 +651,7 @@ export default function Page() {
     await pollTokensFromAPI()
   }
 
-  // Function to poll tokens from API endpoint frequently
+  // Enhanced polling for Vercel serverless compatibility
   const pollTokensFromAPI = async () => {
     if (isPollingRef.current) {
       return // Prevent concurrent polling
@@ -660,47 +660,63 @@ export default function Page() {
     isPollingRef.current = true
 
     try {
-      const response = await fetch('/api/tokens', {
+      // First check if livestream is active
+      const statusResponse = await fetch('/api/livestreams?action=status', {
         cache: 'no-cache',
-        headers: {
-          'Cache-Control': 'no-cache'
-        }
+        headers: { 'Cache-Control': 'no-cache' }
       })
 
-      if (!response.ok) {
-        if (response.status === 404) {
-          // No data available yet, that's okay
-          return
-        }
-        throw new Error(`HTTP error! status: ${response.status}`)
-      }
+      if (statusResponse.ok) {
+        const status = await statusResponse.json()
 
-      const data = await response.json()
+        if (status.has_data && status.token_count > 0) {
+          // Livestream has data, now fetch tokens
+          const response = await fetch('/api/tokens', {
+            cache: 'no-cache',
+            headers: { 'Cache-Control': 'no-cache' }
+          })
 
-      if (data.event === 'live_tokens_update' && data.data) {
-        // Use smart update to only change what's different and maintain sorting
-        setLiveTokens(prevTokens => {
-          let processedTokens: LiveToken[]
+          if (response.ok) {
+            const data = await response.json()
 
-          if (prevTokens.length === 0) {
-            // First load
-            processedTokens = data.data
-          } else {
-            // Update existing tokens while preserving changes
-            processedTokens = updateChangedTokens(prevTokens, data.data)
+            if (data.event === 'live_tokens_update' && data.data && data.data.length > 0) {
+              // Use smart update to only change what's different and maintain sorting
+              setLiveTokens(prevTokens => {
+                let processedTokens: LiveToken[]
+
+                if (prevTokens.length === 0) {
+                  // First load
+                  processedTokens = data.data
+                  console.log(`📊 First load: ${processedTokens.length} tokens`)
+                } else {
+                  // Update existing tokens while preserving changes
+                  processedTokens = updateChangedTokens(prevTokens, data.data)
+                  console.log(`🔄 Updated tokens: ${processedTokens.length} total`)
+                }
+
+                // Always apply current sort to ensure consistency
+                return sortTokens(processedTokens)
+              })
+
+              setLastUpdate(new Date(data.timestamp).toLocaleString())
+              setConnectionStatus('connected')
+              setIsLoading(false)
+            }
+          } else if (response.status === 404) {
+            // No data available, try to establish SSE connection
+            console.log('📭 No tokens data, attempting SSE connection...')
+            establishSSEConnection()
           }
-
-          // Always apply current sort to ensure consistency
-          return sortTokens(processedTokens)
-        })
-
-        setLastUpdate(new Date(data.timestamp).toLocaleString())
-        setConnectionStatus('connected')
-        setIsLoading(false)
+        } else {
+          // No data in livestream, try to establish connection
+          console.log('🔌 Livestream not active, establishing connection...')
+          establishSSEConnection()
+        }
       }
     } catch (error) {
-      // Silently handle polling errors to avoid spam
       console.warn('Polling error:', error)
+      // Don't set connection status to error for polling failures
+      // as this might just be temporary network issues
     } finally {
       isPollingRef.current = false
     }
@@ -776,7 +792,11 @@ export default function Page() {
       clearInterval(pollingIntervalRef.current)
     }
 
-    const interval = isPageVisible ? 500 : 5000 // Poll every 500ms when visible, 5s when hidden
+    // More aggressive polling for Vercel serverless environment
+    const isVercel = typeof window !== 'undefined' && window.location.hostname.includes('vercel.app')
+    const interval = isPageVisible
+      ? (isVercel ? 150 : 200)  // Even more aggressive on Vercel
+      : (isVercel ? 1000 : 2000) // Less aggressive when hidden
     pollingIntervalRef.current = setInterval(() => {
       if (!isLoading && !isPollingRef.current) {
         pollTokensFromAPI()

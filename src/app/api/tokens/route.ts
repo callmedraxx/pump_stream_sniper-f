@@ -5,38 +5,49 @@ import { tokenStorage } from '@/lib/token-storage'
 export async function GET(request: NextRequest) {
   try {
     const tokensData = tokenStorage.getTokens()
-    
+
     if (!tokensData) {
+      console.log('📭 No tokens data available in storage (serverless environment)')
       return NextResponse.json(
-        { 
-          error: 'No tokens data available',
-          message: 'The livestream may not be connected yet. Please wait a moment and try again.'
+        {
+          event: 'live_tokens_update',
+          timestamp: new Date().toISOString(),
+          token_count: 0,
+          data: [],
+          last_sse_update: new Date().toISOString(),
+          backend_total_count: 0
         },
-        { status: 404 }
+        {
+          status: 200,
+          headers: {
+            'Cache-Control': 'no-cache, no-store, must-revalidate',
+            'Pragma': 'no-cache',
+            'Expires': '0'
+          }
+        }
       )
     }
 
+    console.log(`📤 Returning ${tokensData.data.length} tokens from storage`)
     // Add cache headers for better performance
     const response = NextResponse.json(tokensData)
     response.headers.set('Cache-Control', 'no-cache, no-store, must-revalidate')
     response.headers.set('Pragma', 'no-cache')
     response.headers.set('Expires', '0')
-    
+
     return response
-    
+
   } catch (error) {
-    console.error('Error fetching tokens:', error)
+    console.error('❌ Error fetching tokens:', error)
     return NextResponse.json(
-      { 
+      {
         error: 'Internal server error',
         message: 'Failed to fetch tokens data'
       },
       { status: 500 }
     )
   }
-}
-
-// HEAD endpoint to check for updates (for file watching replacement)
+}// HEAD endpoint to check for updates (for file watching replacement)
 export async function HEAD(request: NextRequest) {
   try {
     const lastUpdate = tokenStorage.getLastUpdate()

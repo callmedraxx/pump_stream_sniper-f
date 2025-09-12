@@ -1,5 +1,5 @@
 // In-memory token storage for production environments
-// Since we can't write to the public folder in serverless environments like Vercel
+// Modified for serverless environments like Vercel
 
 interface TokenData {
   event: string
@@ -11,7 +11,9 @@ interface TokenData {
 }
 
 class TokenStorage {
-  private static instance: TokenStorage
+  private static instance: TokenStorage | null = null
+  private static lastInstanceTime: number = 0
+  private static readonly INSTANCE_TIMEOUT = 5 * 60 * 1000 // 5 minutes
   private tokensData: TokenData | null = null
   private lastUpdate: string = ''
   private subscribers: Array<(data: TokenData) => void> = []
@@ -19,9 +21,23 @@ class TokenStorage {
   private constructor() {}
 
   static getInstance(): TokenStorage {
-    if (!TokenStorage.instance) {
+    const now = Date.now()
+
+    // Create new instance if none exists or if the current one is too old
+    if (!TokenStorage.instance || (now - TokenStorage.lastInstanceTime) > TokenStorage.INSTANCE_TIMEOUT) {
       TokenStorage.instance = new TokenStorage()
+      TokenStorage.lastInstanceTime = now
+      console.log('🔄 Created new TokenStorage instance for serverless environment')
     }
+
+    return TokenStorage.instance
+  }
+
+  // Force refresh instance (useful for serverless environments)
+  static refreshInstance(): TokenStorage {
+    TokenStorage.instance = new TokenStorage()
+    TokenStorage.lastInstanceTime = Date.now()
+    console.log('🔄 Force refreshed TokenStorage instance')
     return TokenStorage.instance
   }
 
