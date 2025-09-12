@@ -175,6 +175,7 @@ export default function Page() {
   })
   // Ref to temporarily suppress incoming updates (poll/SSE) right after user changes sort
   const suppressUpdatesRef = useRef<boolean>(false)
+  const currentSortRef = useRef(persistentSort)
   // Store latest incoming data while updates are suppressed so we can apply it once
   const latestIncomingDataRef = useRef<LiveToken[] | null>(null)
 
@@ -229,13 +230,15 @@ export default function Page() {
     return `$${value.toFixed(0)}`
   }
 
-  // Ensure sorting is maintained whenever sort preferences change
-  useEffect(() => {
-    if (liveTokens.length > 0) {
-      console.log(`🔄 Re-applying sort: ${persistentSort.sortBy} ${persistentSort.sortOrder}`)
-      setLiveTokens(prevTokens => sortTokens(prevTokens))
-    }
-  }, [persistentSort.sortBy, persistentSort.sortOrder, persistentSort.dataTimePeriod])
+// Ensure sorting is maintained whenever sort preferences change
+useEffect(() => {
+  if (liveTokens.length > 0) {
+    console.log(`🔄 Re-applying sort: ${persistentSort.sortBy} ${persistentSort.sortOrder}`)
+    setLiveTokens(prevTokens => sortTokens(prevTokens))
+  }
+  // Update the ref whenever persistentSort changes
+  currentSortRef.current = persistentSort
+}, [persistentSort.sortBy, persistentSort.sortOrder, persistentSort.dataTimePeriod])
 
   // Save persistent sort to localStorage and immediately apply it
   const saveSortPreferences = (newSortBy: string, newSortOrder: 'asc' | 'desc', newDataTimePeriod: string) => {
@@ -247,6 +250,7 @@ export default function Page() {
 
   // Persist preference immediately
   setPersistentSort(sortPrefs)
+  currentSortRef.current = sortPrefs
   try {
     localStorage.setItem('tokenTableSort', JSON.stringify(sortPrefs))
   } catch (e) {
@@ -273,7 +277,7 @@ export default function Page() {
       setLiveTokens(prev => {
         // Always re-sort after applying incoming data
         const processed = updateChangedTokens(prev, incoming)
-        const resorted = sortTokens(processed, sortPrefs) // Use explicit sortPrefs
+       const resorted = sortTokens(processed, currentSortRef.current)// Use explicit sortPrefs
         console.log('📥 Applied deferred update and re-sorted')
         return resorted
       })
@@ -748,8 +752,10 @@ export default function Page() {
                 }
 
                 // ALWAYS re-sort with current preferences
-                const sortedTokens = sortTokens(processedTokens, persistentSort)
-                console.log(`🔄 Re-sorted after update: ${sortedTokens.length} tokens`)
+               // Get the current sort preferences from the ref (most up-to-date)
+              const currentSortPrefs = currentSortRef.current
+              const sortedTokens = sortTokens(processedTokens, currentSortPrefs)
+              console.log(`🔄 Re-sorted after update: ${sortedTokens.length} tokens (${currentSortPrefs.sortBy} ${currentSortPrefs.sortOrder})`)
                 return sortedTokens
               })
             }
@@ -970,6 +976,7 @@ export default function Page() {
         // Validate the saved preferences
         if (sortPrefs.sortBy && (sortPrefs.sortOrder === 'asc' || sortPrefs.sortOrder === 'desc') && sortPrefs.dataTimePeriod) {
           setPersistentSort(sortPrefs)
+          currentSortRef.current = sortPrefs // Update the ref as well
           console.log(`📊 Loaded saved sort preferences: ${sortPrefs.sortBy} ${sortPrefs.sortOrder} (${sortPrefs.dataTimePeriod})`)
         }
       }
