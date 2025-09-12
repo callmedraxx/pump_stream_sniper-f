@@ -239,44 +239,47 @@ export default function Page() {
 
   // Save persistent sort to localStorage and immediately apply it
   const saveSortPreferences = (newSortBy: string, newSortOrder: 'asc' | 'desc', newDataTimePeriod: string) => {
-    const sortPrefs = {
-      sortBy: newSortBy,
-      sortOrder: newSortOrder,
-      dataTimePeriod: newDataTimePeriod
-    }
-
-    // Persist preference
-    setPersistentSort(sortPrefs)
-    try {
-      localStorage.setItem('tokenTableSort', JSON.stringify(sortPrefs))
-    } catch (e) {
-      console.warn('Failed to save sort preferences to localStorage', e)
-    }
-
-    // Immediately apply the new sort to the current tokens using the explicit prefs
-    setLiveTokens(prevTokens => sortTokens(prevTokens, sortPrefs))
-
-    // Temporarily suppress incoming updates to avoid race conditions where a poll/SSE
-    // update arrives immediately and overwrites the user's selection.
-    suppressUpdatesRef.current = true
-    setTimeout(() => {
-      suppressUpdatesRef.current = false
-      console.log('🔓 Re-enabled incoming updates after user sort')
-      // If there was an incoming update while we suppressed, apply it now
-      if (latestIncomingDataRef.current) {
-        const incoming = latestIncomingDataRef.current
-        latestIncomingDataRef.current = null
-        setLiveTokens(prev => {
-          if (prev.length === 0) {
-            return sortTokens(incoming)
-          }
-          const processed = updateChangedTokens(prev, incoming)
-          return sortTokens(processed)
-        })
-        console.log('📥 Applied deferred incoming update after user sort')
-      }
-    }, 500) // 500ms should be enough to avoid immediate race
+  const sortPrefs = {
+    sortBy: newSortBy,
+    sortOrder: newSortOrder,
+    dataTimePeriod: newDataTimePeriod
   }
+
+  // Persist preference immediately
+  setPersistentSort(sortPrefs)
+  try {
+    localStorage.setItem('tokenTableSort', JSON.stringify(sortPrefs))
+  } catch (e) {
+    console.warn('Failed to save sort preferences to localStorage', e)
+  }
+
+  // IMMEDIATELY apply the new sort using the explicit prefs
+  setLiveTokens(prevTokens => {
+    const sortedTokens = sortTokens(prevTokens, sortPrefs)
+    console.log(`🎯 Sort applied immediately: ${sortPrefs.sortBy} (${sortPrefs.sortOrder}) - ${sortedTokens.length} tokens`)
+    return sortedTokens
+  })
+
+  // Suppress incoming updates briefly to prevent race conditions
+  suppressUpdatesRef.current = true
+  setTimeout(() => {
+    suppressUpdatesRef.current = false
+    console.log('🔓 Re-enabled incoming updates after user sort')
+    
+    // Apply any deferred updates
+    if (latestIncomingDataRef.current) {
+      const incoming = latestIncomingDataRef.current
+      latestIncomingDataRef.current = null
+      setLiveTokens(prev => {
+        // Always re-sort after applying incoming data
+        const processed = updateChangedTokens(prev, incoming)
+        const resorted = sortTokens(processed, sortPrefs) // Use explicit sortPrefs
+        console.log('📥 Applied deferred update and re-sorted')
+        return resorted
+      })
+    }
+  }, 500)
+}
 
   // Helper function to parse formatted age strings like "5m ago", "2h ago", "3d ago" into timestamps
   const parseFormattedAge = (ageString: string): number => {
@@ -705,80 +708,65 @@ export default function Page() {
 
   // Enhanced polling for Vercel serverless compatibility
   const pollTokensFromAPI = async () => {
-    if (isPollingRef.current) {
-      return // Prevent concurrent polling
-    }
+  if (isPollingRef.current) {
+    return
+  }
 
-    isPollingRef.current = true
+  isPollingRef.current = true
 
-    try {
-      // First check if livestream is active
-      const statusResponse = await fetch('/api/livestreams?action=status', {
-        cache: 'no-cache',
-        headers: { 'Cache-Control': 'no-cache' }
-      })
+  try {
+    const statusResponse = await fetch('/api/livestreams?action=status', {
+      cache: 'no-cache',
+      headers: { 'Cache-Control': 'no-cache' }
+    })
 
-      if (statusResponse.ok) {
-        const status = await statusResponse.json()
+    if (statusResponse.ok) {
+      const status = await statusResponse.json()
 
-        if (status.has_data && status.token_count > 0) {
-          // Livestream has data, now fetch tokens
-          const response = await fetch('/api/tokens', {
-            cache: 'no-cache',
-            headers: { 'Cache-Control': 'no-cache' }
-          })
+      if (status.has_data && status.token_count > 0) {
+        const response = await fetch('/api/tokens', {
+          cache: 'no-cache',
+          headers: { 'Cache-Control': 'no-cache' }
+        })
 
-          if (response.ok) {
-            const data = await response.json()
+        if (response.ok) {
+          const data = await response.json()
 
-            if (data.event === 'live_tokens_update' && data.data && data.data.length > 0) {
-              // Use smart update to only change what's different and maintain sorting
-              if (suppressUpdatesRef.current) {
-                // Store incoming update for later application
-                latestIncomingDataRef.current = data.data
-                console.log('⏸️ Suppressing incoming update while user changed sort; stored for later')
-              } else {
-                setLiveTokens(prevTokens => {
-                  let processedTokens: LiveToken[]
+          if (data.event === 'live_tokens_update' && data.data && data.data.length > 0) {
+            if (suppressUpdatesRef.current) {
+              latestIncomingDataRef.current = data.data
+              console.log('⏸️ Suppressing incoming update while user changed sort; stored for later')
+            } else {
+              setLiveTokens(prevTokens => {
+                let processedTokens: LiveToken[]
 
-                  if (prevTokens.length === 0) {
-                    // First load
-                    processedTokens = data.data
-                    console.log(`📊 First load: ${processedTokens.length} tokens`)
-                  } else {
-                    // Update existing tokens while preserving changes
-                    processedTokens = updateChangedTokens(prevTokens, data.data)
-                    console.log(`🔄 Updated tokens: ${processedTokens.length} total`)
-                  }
+                if (prevTokens.length === 0) {
+                  processedTokens = data.data
+                  console.log(`📊 First load: ${processedTokens.length} tokens`)
+                } else {
+                  processedTokens = updateChangedTokens(prevTokens, data.data)
+                }
 
-                  // Always apply current sort to ensure consistency
-                  return sortTokens(processedTokens)
-                })
-              }
-
-              setLastUpdate(new Date(data.timestamp).toLocaleString())
-              setConnectionStatus('connected')
-              setIsLoading(false)
+                // ALWAYS re-sort with current preferences
+                const sortedTokens = sortTokens(processedTokens, persistentSort)
+                console.log(`🔄 Re-sorted after update: ${sortedTokens.length} tokens`)
+                return sortedTokens
+              })
             }
-          } else if (response.status === 404) {
-            // No data available, try to establish SSE connection
-            console.log('📭 No tokens data, attempting SSE connection...')
-            establishSSEConnection()
+
+            setLastUpdate(new Date(data.timestamp).toLocaleString())
+            setConnectionStatus('connected')
+            setIsLoading(false)
           }
-        } else {
-          // No data in livestream, try to establish connection
-          console.log('🔌 Livestream not active, establishing connection...')
-          establishSSEConnection()
         }
       }
-    } catch (error) {
-      console.warn('Polling error:', error)
-      // Don't set connection status to error for polling failures
-      // as this might just be temporary network issues
-    } finally {
-      isPollingRef.current = false
     }
+  } catch (error) {
+    console.warn('Polling error:', error)
+  } finally {
+    isPollingRef.current = false
   }
+}
 
 
   // Unified function to sort tokens based on current sort criteria
@@ -872,91 +860,76 @@ export default function Page() {
 
   // Function to update only changed tokens while preserving sorted order
   const updateChangedTokens = (existingTokens: LiveToken[], newTokens: LiveToken[]): LiveToken[] => {
-    const existingMap = new Map(existingTokens.map(token => [token.token_info.mint, token]))
-    const newTokensMap = new Map(newTokens.map(token => [token.token_info.mint, token]))
-    const updatedTokens: LiveToken[] = []
-    let changedCount = 0
+  const existingMap = new Map(existingTokens.map(token => [token.token_info.mint, token]))
+  const newTokensMap = new Map(newTokens.map(token => [token.token_info.mint, token]))
+  const updatedTokens: LiveToken[] = []
+  let changedCount = 0
 
-    // First, update all existing tokens in their current sorted order
-    for (const existingToken of existingTokens) {
-      const mint = existingToken.token_info.mint
-      const newToken = newTokensMap.get(mint)
+  // Process all existing tokens (preserve their data, not their order)
+  for (const existingToken of existingTokens) {
+    const mint = existingToken.token_info.mint
+    const newToken = newTokensMap.get(mint)
 
-      if (newToken) {
-        // Compare key fields to see if anything changed
-        const hasChanged = compareTokens(existingToken, newToken)
+    if (newToken) {
+      const hasChanged = compareTokens(existingToken, newToken)
 
-        if (hasChanged) {
-          // Store previous values for animation
-          const previousValues = {
-            market_cap: existingToken.market_data.market_cap,
-            usd_market_cap: existingToken.market_data.usd_market_cap,
-            progress_percentage: existingToken.market_data.progress_percentage,
-            ath: existingToken.market_data.ath || undefined,
-            volume_5m: existingToken.trading_info.volume_5m,
-            volume_1h: existingToken.trading_info.volume_1h,
-            volume_6h: existingToken.trading_info.volume_6h,
-            volume_24h: existingToken.trading_info.volume_24h,
-            txns_5m: existingToken.trading_info.txns_5m,
-            txns_1h: existingToken.trading_info.txns_1h,
-            txns_6h: existingToken.trading_info.txns_6h,
-            txns_24h: existingToken.trading_info.txns_24h,
-            traders_5m: existingToken.trading_info.traders_5m,
-            traders_1h: existingToken.trading_info.traders_1h,
-            traders_6h: existingToken.trading_info.traders_6h,
-            traders_24h: existingToken.trading_info.traders_24h,
-            price_change_5m: existingToken.trading_info.price_change_5m,
-            price_change_1h: existingToken.trading_info.price_change_1h,
-            price_change_6h: existingToken.trading_info.price_change_6h,
-            price_change_24h: existingToken.trading_info.price_change_24h,
-            viewers: existingToken.activity_info.viewers,
-          }
-
-          // Mark as updated and merge new data
-          updatedTokens.push({
-            ...newToken,
-            _isUpdated: true,
-            _updatedAt: Date.now(),
-            _previousValues: previousValues
-          })
-          changedCount++
-        } else {
-          // Keep existing token
-          updatedTokens.push({
-            ...existingToken,
-            _isUpdated: false
-          })
+      if (hasChanged) {
+        const previousValues = {
+          market_cap: existingToken.market_data.market_cap,
+          usd_market_cap: existingToken.market_data.usd_market_cap,
+          progress_percentage: existingToken.market_data.progress_percentage,
+          ath: existingToken.market_data.ath || undefined,
+          volume_5m: existingToken.trading_info.volume_5m,
+          volume_1h: existingToken.trading_info.volume_1h,
+          volume_6h: existingToken.trading_info.volume_6h,
+          volume_24h: existingToken.trading_info.volume_24h,
+          txns_5m: existingToken.trading_info.txns_5m,
+          txns_1h: existingToken.trading_info.txns_1h,
+          txns_6h: existingToken.trading_info.txns_6h,
+          txns_24h: existingToken.trading_info.txns_24h,
+          traders_5m: existingToken.trading_info.traders_5m,
+          traders_1h: existingToken.trading_info.traders_1h,
+          traders_6h: existingToken.trading_info.traders_6h,
+          traders_24h: existingToken.trading_info.traders_24h,
+          price_change_5m: existingToken.trading_info.price_change_5m,
+          price_change_1h: existingToken.trading_info.price_change_1h,
+          price_change_6h: existingToken.trading_info.price_change_6h,
+          price_change_24h: existingToken.trading_info.price_change_24h,
+          viewers: existingToken.activity_info.viewers,
         }
+
+        updatedTokens.push({
+          ...newToken,
+          _isUpdated: true,
+          _updatedAt: Date.now(),
+          _previousValues: previousValues
+        })
+        changedCount++
       } else {
-        // Token no longer exists in new data, keep it for now
         updatedTokens.push({
           ...existingToken,
           _isUpdated: false
         })
       }
     }
-
-    // Then add any completely new tokens in the correct sorted position
-    const newTokensToAdd = newTokens.filter(newToken => !existingMap.has(newToken.token_info.mint))
-
-    if (newTokensToAdd.length > 0) {
-      // Create a combined list with existing tokens and new tokens
-      const allTokens = [...updatedTokens, ...newTokensToAdd.map(token => ({
-        ...token,
-        _isUpdated: true,
-        _updatedAt: Date.now()
-      }))]
-
-      // Re-sort the entire list to ensure proper ordering
-      const resortedTokens = sortTokens(allTokens)
-
-      console.log(`🔄 Added ${newTokensToAdd.length} new tokens, resorted ${resortedTokens.length} total`)
-      return resortedTokens
-    }
-
-    console.log(`🔄 Token comparison: ${changedCount} changed, order preserved`)
-    return updatedTokens
+    // Remove the else clause that kept tokens not in new data
   }
+
+  // Add completely new tokens
+  const newTokensToAdd = newTokens.filter(newToken => !existingMap.has(newToken.token_info.mint))
+  if (newTokensToAdd.length > 0) {
+    updatedTokens.push(...newTokensToAdd.map(token => ({
+      ...token,
+      _isUpdated: true,
+      _updatedAt: Date.now()
+    })))
+  }
+
+  console.log(`🔄 Token update: ${changedCount} changed, ${newTokensToAdd.length} new, ${updatedTokens.length} total`)
+  
+  // IMPORTANT: Don't sort here - let the caller handle sorting
+  return updatedTokens
+}
 
   // Function to compare two tokens for changes
   const compareTokens = (token1: LiveToken, token2: LiveToken): boolean => {
