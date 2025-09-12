@@ -169,8 +169,8 @@ export default function Page() {
     sortOrder: 'asc' | 'desc'
     dataTimePeriod: string
   }>({
-    sortBy: 'age',
-    sortOrder: 'desc',
+    sortBy: 'mcap',     // Default: market cap
+    sortOrder: 'desc',  // Default: highest first
     dataTimePeriod: '24h'
   })
 
@@ -601,9 +601,10 @@ export default function Page() {
                   const data = JSON.parse(jsonStr)
 
                   if (data.event === 'tokens_update' && data.data?.tokens) {
-                    // SSE indicates tokens have been updated, but we don't need to poll
-                    // since the main update comes through the 'live_tokens_update' event
-                    console.log(`📡 SSE heartbeat: ${data.data.tokens.length} tokens available`)
+                    //console.log(`📊 Received ${data.data.tokens.length} tokens from SSE stream`)
+
+                    // Immediately poll for updated tokens when SSE data arrives
+                    pollTokensFromAPI()
                   }
                 } catch (parseError) {
                   console.warn('Failed to parse SSE data:', parseError)
@@ -664,7 +665,8 @@ export default function Page() {
     //console.log('🔄 Manual reconnection triggered')
     setReconnectAttempts(0)
     await establishSSEConnection()
-    // establishSSEConnection will handle getting the latest data
+    // Also trigger an immediate API poll
+    await pollTokensFromAPI()
   }
 
   // Enhanced polling for Vercel serverless compatibility
@@ -701,17 +703,17 @@ export default function Page() {
                 let processedTokens: LiveToken[]
 
                 if (prevTokens.length === 0) {
-                  // First load - apply current sort
-                  processedTokens = sortTokens(data.data)
+                  // First load
+                  processedTokens = data.data
                   console.log(`📊 First load: ${processedTokens.length} tokens`)
                 } else {
-                  // Update existing tokens while preserving sorted order
+                  // Update existing tokens while preserving changes
                   processedTokens = updateChangedTokens(prevTokens, data.data)
                   console.log(`🔄 Updated tokens: ${processedTokens.length} total`)
                 }
 
-                // updateChangedTokens already returns properly sorted tokens
-                return processedTokens
+                // Always apply current sort to ensure consistency
+                return sortTokens(processedTokens)
               })
 
               setLastUpdate(new Date(data.timestamp).toLocaleString())
@@ -780,7 +782,7 @@ export default function Page() {
         sortedTokens = sortByTrending(tokens, persistentSort.dataTimePeriod)
         break
       default:
-        sortedTokens = sortByAge(tokens, 'desc') // Default fallback
+        sortedTokens = sortByMarketCap(tokens, 'desc') // Default fallback: market cap highest first
     }
 
     //console.log(`🔄 Sorted ${sortedTokens.length} tokens by ${persistentSort.sortBy} (${persistentSort.sortOrder}) for ${persistentSort.dataTimePeriod}`)
@@ -802,19 +804,13 @@ export default function Page() {
     return () => document.removeEventListener('visibilitychange', handleVisibilityChange)
   }, [])
 
-  // Update polling interval based on page visibility and SSE connection status
+  // Update polling interval based on page visibility
   useEffect(() => {
     if (pollingIntervalRef.current) {
       clearInterval(pollingIntervalRef.current)
     }
 
-    // Disable polling if SSE is connected to prevent conflicts
-    if (isConnected) {
-      console.log('🔌 SSE connected, disabling polling to prevent conflicts')
-      return
-    }
-
-    // More aggressive polling for Vercel serverless environment (only when SSE is not connected)
+    // More aggressive polling for Vercel serverless environment
     const isVercel = typeof window !== 'undefined' && window.location.hostname.includes('vercel.app')
     const interval = isPageVisible
       ? (isVercel ? 150 : 200)  // Even more aggressive on Vercel
@@ -830,7 +826,7 @@ export default function Page() {
         clearInterval(pollingIntervalRef.current)
       }
     }
-  }, [isPageVisible, isLoading, isConnected])
+  }, [isPageVisible, isLoading])
 
   
 
@@ -952,6 +948,24 @@ export default function Page() {
     return false
   }
 
+  // Load persistent sort preferences from localStorage on mount
+  useEffect(() => {
+    try {
+      const savedSort = localStorage.getItem('tokenTableSort')
+      if (savedSort) {
+        const sortPrefs = JSON.parse(savedSort)
+        // Validate the saved preferences
+        if (sortPrefs.sortBy && (sortPrefs.sortOrder === 'asc' || sortPrefs.sortOrder === 'desc') && sortPrefs.dataTimePeriod) {
+          setPersistentSort(sortPrefs)
+          console.log(`📊 Loaded saved sort preferences: ${sortPrefs.sortBy} ${sortPrefs.sortOrder} (${sortPrefs.dataTimePeriod})`)
+        }
+      }
+    } catch (error) {
+      console.warn('Failed to load sort preferences from localStorage:', error)
+    }
+  }, []) // Only run once on mount
+
+  // Initial data fetch on page load
   useEffect(() => {
     // Initial data fetch on page load
     const initializeData = async () => {
