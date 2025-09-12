@@ -1,6 +1,7 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useState, useRef } from "react"
+import Image from "next/image"
 import { AppSidebar } from "@/components/app-sidebar"
 import { SiteHeader } from "@/components/site-header"
 import {
@@ -123,6 +124,35 @@ interface LiveToken {
   }
 }
 
+interface TokenImageProps {
+  src: string
+  alt: string
+  symbol: string
+}
+
+function TokenImage({ src, alt, symbol }: TokenImageProps) {
+  const [hasError, setHasError] = useState(false)
+
+  if (hasError) {
+    return (
+      <div className="h-full w-full bg-gradient-to-br from-blue-400 to-purple-500 flex items-center justify-center text-white text-xs font-bold">
+        {symbol?.charAt(0) || '?'}
+      </div>
+    )
+  }
+
+  return (
+    <Image
+      src={src}
+      alt={alt}
+      width={32}
+      height={32}
+      className="h-full w-full object-cover"
+      onError={() => setHasError(true)}
+    />
+  )
+}
+
 export default function Page() {
   const [liveTokens, setLiveTokens] = useState<LiveToken[]>([])
   const [isLoading, setIsLoading] = useState<boolean>(true)
@@ -143,6 +173,28 @@ export default function Page() {
     sortOrder: 'desc',
     dataTimePeriod: '24h'
   })
+
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState<number>(1)
+  const [itemsPerPage] = useState<number>(48)
+
+  // Calculate pagination values
+  const totalPages = Math.ceil(liveTokens.length / itemsPerPage)
+  const startIndex = (currentPage - 1) * itemsPerPage
+  const endIndex = startIndex + itemsPerPage
+  const currentTokens = liveTokens.slice(startIndex, endIndex)
+
+  // Reset to first page when sorting changes
+  useEffect(() => {
+    setCurrentPage(1)
+  }, [persistentSort.sortBy, persistentSort.sortOrder, persistentSort.dataTimePeriod])
+
+  // Reset to first page when tokens change significantly
+  useEffect(() => {
+    if (currentPage > totalPages && totalPages > 0) {
+      setCurrentPage(1)
+    }
+  }, [currentPage, totalPages])
 
   // Helper function to parse market cap strings (e.g., "35.0K" -> 35000, "1.2M" -> 1200000)
   const parseMarketCap = (mcapStr: string): number => {
@@ -538,11 +590,9 @@ export default function Page() {
 
                   if (data.event === 'tokens_update' && data.data?.tokens) {
                     //console.log(`📊 Received ${data.data.tokens.length} tokens from SSE stream`)
-                    
-                    // Wait a moment for the file to be written, then reload
-                    setTimeout(async () => {
-                      await loadTokensFromFile()
-                    }, 500)
+
+                    // Immediately poll for updated tokens when SSE data arrives
+                    pollTokensFromAPI()
                   }
                 } catch (parseError) {
                   console.warn('Failed to parse SSE data:', parseError)
@@ -588,7 +638,7 @@ export default function Page() {
 
   // Legacy function for initial token fetch (now just establishes persistent connection)
   const fetchInitialTokens = async () => {
-    await loadTokensFromFile() // Load existing data first
+    await pollTokensFromAPI() // Load existing data first
     await establishSSEConnection() // Then establish live connection
   }
 
@@ -597,12 +647,19 @@ export default function Page() {
     //console.log('🔄 Manual reconnection triggered')
     setReconnectAttempts(0)
     await establishSSEConnection()
+    // Also trigger an immediate API poll
+    await pollTokensFromAPI()
   }
 
-  // Function to load tokens from API endpoint
-  const loadTokensFromFile = async () => {
+  // Function to poll tokens from API endpoint frequently
+  const pollTokensFromAPI = async () => {
+    if (isPollingRef.current) {
+      return // Prevent concurrent polling
+    }
+
+    isPollingRef.current = true
+
     try {
-      //console.log('📂 Loading tokens from API endpoint')
       const response = await fetch('/api/tokens', {
         cache: 'no-cache',
         headers: {
@@ -612,32 +669,27 @@ export default function Page() {
 
       if (!response.ok) {
         if (response.status === 404) {
-          console.log('📂 No tokens data available yet, will load when available')
+          // No data available yet, that's okay
           return
         }
         throw new Error(`HTTP error! status: ${response.status}`)
       }
 
       const data = await response.json()
-      //console.log('📂 Loaded tokens from file:', data)
 
       if (data.event === 'live_tokens_update' && data.data) {
-        //console.log(`✅ Setting ${data.data.length} tokens from file`)
-
         // Use smart update to only change what's different and maintain sorting
         setLiveTokens(prevTokens => {
           let processedTokens: LiveToken[]
-          
+
           if (prevTokens.length === 0) {
             // First load
             processedTokens = data.data
-            //console.log(`📊 First load: ${processedTokens.length} tokens`)
           } else {
             // Update existing tokens while preserving changes
             processedTokens = updateChangedTokens(prevTokens, data.data)
-            //console.log(`🔄 Updated tokens, applying sort: ${persistentSort.sortBy}`)
           }
-          
+
           // Always apply current sort to ensure consistency
           return sortTokens(processedTokens)
         })
@@ -647,8 +699,10 @@ export default function Page() {
         setIsLoading(false)
       }
     } catch (error) {
-      console.error('❌ Error loading tokens from file:', error)
-      setIsLoading(false)
+      // Silently handle polling errors to avoid spam
+      console.warn('Polling error:', error)
+    } finally {
+      isPollingRef.current = false
     }
   }
 
@@ -701,32 +755,42 @@ export default function Page() {
     return sortedTokens
   }
 
-  // File watching state
-  const [lastFileModified, setLastFileModified] = useState<number>(0)
+  // Page visibility state for optimizing polling
+  const [isPageVisible, setIsPageVisible] = useState(true)
+  const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null)
+  const isPollingRef = useRef<boolean>(false)
 
-  // Function to check for file updates
-  const checkForFileUpdates = async () => {
-    try {
-      const response = await fetch('/api/tokens', {
-        method: 'HEAD',
-        cache: 'no-cache'
-      })
-
-      if (response.ok) {
-        const lastModified = response.headers.get('last-modified')
-        if (lastModified) {
-          const modifiedTime = new Date(lastModified).getTime()
-          if (modifiedTime > lastFileModified && lastFileModified > 0) {
-            //console.log('� File changed, reloading tokens...')
-            await loadTokensFromFile()
-          }
-          setLastFileModified(modifiedTime)
-        }
-      }
-    } catch {
-      // File might not exist yet, that's okay
+  // Handle page visibility changes to optimize polling
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      setIsPageVisible(!document.hidden)
     }
-  }
+
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange)
+  }, [])
+
+  // Update polling interval based on page visibility
+  useEffect(() => {
+    if (pollingIntervalRef.current) {
+      clearInterval(pollingIntervalRef.current)
+    }
+
+    const interval = isPageVisible ? 500 : 5000 // Poll every 500ms when visible, 5s when hidden
+    pollingIntervalRef.current = setInterval(() => {
+      if (!isLoading && !isPollingRef.current) {
+        pollTokensFromAPI()
+      }
+    }, interval)
+
+    return () => {
+      if (pollingIntervalRef.current) {
+        clearInterval(pollingIntervalRef.current)
+      }
+    }
+  }, [isPageVisible, isLoading])
+
+  
 
   // Function to update only changed tokens
   const updateChangedTokens = (existingTokens: LiveToken[], newTokens: LiveToken[]): LiveToken[] => {
@@ -832,25 +896,17 @@ export default function Page() {
     // Initial data fetch on page load
     const initializeData = async () => {
       // First try to load existing tokens
-      await loadTokensFromFile()
+      await pollTokensFromAPI()
 
-      // If no tokens exist, fetch from backend
-      if (liveTokens.length === 0) {
-        await fetchInitialTokens()
-      }
+      // Always establish SSE connection for live updates (regardless of initial data)
+      setTimeout(async () => {
+        await establishSSEConnection()
+      }, 100) // Small delay to avoid race condition
     }
 
     initializeData()
 
-    // Start file watching after initial load
-    const fileWatchInterval = setInterval(() => {
-      if (!isLoading && liveTokens.length > 0) {
-        checkForFileUpdates()
-      }
-    }, 100) // Check every 100 milliseconds
-
     return () => {
-      clearInterval(fileWatchInterval)
       // Clean up SSE connection on unmount
       if (sseConnection) {
         //console.log('🧹 Cleaning up SSE connection on component unmount')
@@ -858,7 +914,7 @@ export default function Page() {
         setSseConnection(null)
       }
     }
-  }, [isLoading, liveTokens.length]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, []) // Only run once on mount
 
   // Clear update flags after 3 seconds
   useEffect(() => {
@@ -1086,7 +1142,7 @@ export default function Page() {
                       {/* Table Body */}
                       <tbody>
                         {isLoading ? (
-                          Array.from({ length: 60 }, (_, i) => (
+                          Array.from({ length: itemsPerPage }, (_, i) => (
                             <tr key={i} className="border-b animate-pulse h-16">
                               {/* Fixed Token Cell */}
                               <td className="sticky left-0 z-10 w-[240px] p-3 bg-background border-r shadow-sm">
@@ -1114,7 +1170,7 @@ export default function Page() {
                             </tr>
                           ))
                         ) : (
-                          liveTokens.map((token, index) => (
+                          currentTokens.map((token, index) => (
                             <tr 
                               key={token.token_info.mint}
                               className={`border-b hover:bg-muted/30 transition-colors duration-300 h-16 ${
@@ -1134,17 +1190,14 @@ export default function Page() {
                                 >
                                   <div className="flex items-center gap-3">
                                     <span className="text-xs text-muted-foreground font-mono w-6">
-                                      #{index + 1}
+                                      #{startIndex + index + 1}
                                     </span>
                                     <div className="h-8 w-8 rounded-full bg-muted flex-shrink-0 overflow-hidden">
                                       {token.token_info.image_uri ? (
-                                        <img 
-                                          src={token.token_info.image_uri} 
+                                        <TokenImage
+                                          src={token.token_info.image_uri}
                                           alt={token.token_info.symbol}
-                                          className="h-full w-full object-cover"
-                                          onError={(e) => {
-                                            (e.target as HTMLImageElement).style.display = 'none'
-                                          }}
+                                          symbol={token.token_info.symbol}
                                         />
                                       ) : (
                                         <div className="h-full w-full bg-gradient-to-br from-blue-400 to-purple-500 flex items-center justify-center text-white text-xs font-bold">
@@ -1301,6 +1354,56 @@ export default function Page() {
                     </table>
                   </div>
                 </div>
+
+                {/* Pagination Controls */}
+                {totalPages > 1 && (
+                  <div className="flex items-center justify-between px-4 py-4 border-t">
+                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                      <span>
+                        Showing {startIndex + 1}-{Math.min(endIndex, liveTokens.length)} of {liveTokens.length} tokens
+                      </span>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                        disabled={currentPage === 1}
+                      >
+                        Previous
+                      </Button>
+
+                      <div className="flex items-center gap-1">
+                        {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                          const pageNum = Math.max(1, Math.min(totalPages - 4, currentPage - 2)) + i
+                          if (pageNum > totalPages) return null
+
+                          return (
+                            <Button
+                              key={pageNum}
+                              variant={currentPage === pageNum ? "default" : "outline"}
+                              size="sm"
+                              onClick={() => setCurrentPage(pageNum)}
+                              className="w-8 h-8 p-0"
+                            >
+                              {pageNum}
+                            </Button>
+                          )
+                        })}
+                      </div>
+
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                        disabled={currentPage === totalPages}
+                      >
+                        Next
+                      </Button>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           </div>
