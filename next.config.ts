@@ -23,6 +23,12 @@ const nextConfig: NextConfig = {
       },
       {
         protocol: 'https',
+        hostname: 'cf-ipfs.com',
+        port: '',
+        pathname: '/ipfs/**',
+      },
+      {
+        protocol: 'https',
         hostname: 'arweave.net',
         port: '',
         pathname: '/**',
@@ -54,6 +60,18 @@ const nextConfig: NextConfig = {
       {
         protocol: 'https',
         hostname: 's2.coinmarketcap.com',
+        port: '',
+        pathname: '/**',
+      },
+      {
+        protocol: 'https',
+        hostname: 'thumbnails.padre.gg',
+        port: '',
+        pathname: '/**',
+      },
+      {
+        protocol: 'https',
+        hostname: 'metadata.pumplify.eu',
         port: '',
         pathname: '/**',
       },

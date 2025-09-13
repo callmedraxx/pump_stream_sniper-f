@@ -44,8 +44,14 @@ export function AnimatedNumber({
         
         // Easing function for smooth animation
         const easeOutCubic = 1 - Math.pow(1 - progress, 3)
-        const interpolatedValue = startValue + (endValue - startValue) * easeOutCubic
-        
+        let interpolatedValue = startValue + (endValue - startValue) * easeOutCubic
+
+        // If decimals is zero, round to nearest integer to avoid floating point values
+        // showing during the animation for counts (viewers, txns, etc.)
+        if (decimals === 0) {
+          interpolatedValue = Math.round(interpolatedValue)
+        }
+
         setCurrentValue(interpolatedValue)
         
         if (progress < 1) {

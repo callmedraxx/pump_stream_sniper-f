@@ -7,7 +7,7 @@ interface TokenData {
   token_count: number
   data: any[]
   last_sse_update: string
-  backend_total_count: number
+  backend_total_count: number | null
 }
 
 class TokenStorage {
@@ -43,19 +43,54 @@ class TokenStorage {
 
   // Store tokens data in memory
   setTokens(data: TokenData): void {
-    this.tokensData = data
+    if (data.event === 'live_token_update' && this.tokensData) {
+      // Individual token update - merge with existing data
+      const existingTokens = this.tokensData.data
+      const updatedToken = data.data[0]
+      
+      // Find existing token by mint
+      const existingIndex = existingTokens.findIndex((t: any) => t.token_info?.mint === updatedToken.token_info?.mint)
+      
+      if (existingIndex >= 0) {
+        // Update existing token
+        existingTokens[existingIndex] = {
+          ...updatedToken,
+          _isUpdated: true,
+          _updatedAt: Date.now()
+        }
+        console.log(`🔄 Merged individual token update for ${updatedToken.token_info?.symbol}`)
+      } else {
+        // Add new token
+        existingTokens.unshift(updatedToken)
+        console.log(`➕ Added new token ${updatedToken.token_info?.symbol} to storage`)
+      }
+      
+      // Update the stored data with merged tokens
+      this.tokensData = {
+        ...this.tokensData,
+        data: existingTokens,
+        token_count: existingTokens.length,
+        last_sse_update: data.last_sse_update,
+        timestamp: data.timestamp
+        // Keep existing backend_total_count
+      }
+    } else {
+      // Full update - replace all data
+      this.tokensData = data
+    }
+    
     this.lastUpdate = new Date().toISOString()
     
     // Notify all subscribers of the update
     this.subscribers.forEach(callback => {
       try {
-        callback(data)
+        callback(this.tokensData!)
       } catch (error) {
         console.error('Error notifying subscriber:', error)
       }
     })
     
-    console.log(`✅ Stored ${data.data.length} tokens in memory at ${this.lastUpdate}`)
+    console.log(`✅ Stored ${this.tokensData.data.length} tokens in memory at ${this.lastUpdate}`)
   }
 
   // Get current tokens data
