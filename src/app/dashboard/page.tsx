@@ -10,7 +10,7 @@ import {
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 // import { TokenDebugPanel } from "@/components/token-debug-panel"
 import { Skeleton } from "@/components/ui/skeleton"
-import { useSSE } from "@/hooks/use-sse"
+import { useWebsocket } from "@/hooks/use-websocket"
 import { useTokenSorting } from "@/hooks/useTokenSorting"
 import { LiveToken } from "@/types/token.types"
 import { TableHeader } from "../../components/TableHeader"
@@ -21,20 +21,12 @@ export default function Page() {
   // Use the SSE hook for real-time token data
   const {
     tokens: liveTokens,
-    isConnected,
-    connectionStatus,
-    lastUpdate,
-    error,
-    reconnect
-  } = useSSE({
+    connect: reconnect,
+    disconnect,
+    isConnected
+  } = useWebsocket({
     onTokenUpdate: (tokens) => {
-      console.log('Tokens updated from SSE:', tokens.length)
-    },
-    onError: (error) => {
-      console.error('SSE Error:', error)
-    },
-    onConnectionChange: (connected) => {
-      console.log('SSE Connection changed:', connected)
+      //console.log('Tokens updated from WebSocket:', tokens.length)
     }
   })
 

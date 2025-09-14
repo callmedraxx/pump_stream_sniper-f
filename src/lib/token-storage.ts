@@ -27,7 +27,7 @@ class TokenStorage {
     if (!TokenStorage.instance || (now - TokenStorage.lastInstanceTime) > TokenStorage.INSTANCE_TIMEOUT) {
       TokenStorage.instance = new TokenStorage()
       TokenStorage.lastInstanceTime = now
-      console.log('🔄 Created new TokenStorage instance for serverless environment')
+      //console.log('🔄 Created new TokenStorage instance for serverless environment')
     }
 
     return TokenStorage.instance
@@ -90,7 +90,7 @@ class TokenStorage {
       }
     })
     
-    console.log(`✅ Stored ${this.tokensData.data.length} tokens in memory at ${this.lastUpdate}`)
+    //console.log(`✅ Stored ${this.tokensData.data.length} tokens in memory at ${this.lastUpdate}`)
   }
 
   // Get current tokens data

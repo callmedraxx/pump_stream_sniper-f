@@ -26,51 +26,57 @@ export function AnimatedNumber({
   const [currentValue, setCurrentValue] = useState(previousValue ?? value)
   const [isAnimating, setIsAnimating] = useState(false)
   const animationRef = useRef<number>(0)
+  const currentValueRef = useRef<number>(currentValue)
 
   const isIncreasing = value > currentValue
   const isDecreasing = value < currentValue
-  const hasChanged = value !== currentValue
+
+  // keep a ref copy of currentValue so the effect can read the latest without
+  // adding `currentValue` to the deps and causing a re-run each frame.
+  useEffect(() => { currentValueRef.current = currentValue }, [currentValue])
 
   useEffect(() => {
-    if (hasChanged) {
-      setIsAnimating(true)
-      const startValue = currentValue
-      const endValue = value
-      const startTime = Date.now()
+    const startValue = currentValueRef.current
+    const endValue = value
+    if (startValue === endValue) return
 
-      const animate = () => {
-        const elapsed = Date.now() - startTime
-        const progress = Math.min(elapsed / duration, 1)
-        
-        // Easing function for smooth animation
-        const easeOutCubic = 1 - Math.pow(1 - progress, 3)
-        let interpolatedValue = startValue + (endValue - startValue) * easeOutCubic
+    setIsAnimating(true)
+    const startTime = Date.now()
 
-        // If decimals is zero, round to nearest integer to avoid floating point values
-        // showing during the animation for counts (viewers, txns, etc.)
-        if (decimals === 0) {
-          interpolatedValue = Math.round(interpolatedValue)
-        }
+    const animate = () => {
+      const elapsed = Date.now() - startTime
+      const progress = Math.min(elapsed / duration, 1)
 
-        setCurrentValue(interpolatedValue)
-        
-        if (progress < 1) {
-          animationRef.current = requestAnimationFrame(animate)
-        } else {
-          setCurrentValue(endValue)
-          setIsAnimating(false)
-        }
+      // Easing function for smooth animation
+      const easeOutCubic = 1 - Math.pow(1 - progress, 3)
+      let interpolatedValue = startValue + (endValue - startValue) * easeOutCubic
+
+      // If decimals is zero, round to nearest integer to avoid floating point values
+      if (decimals === 0) {
+        interpolatedValue = Math.round(interpolatedValue)
       }
 
-      animationRef.current = requestAnimationFrame(animate)
+      // Avoid no-op setState which can cause unnecessary renders
+      if (interpolatedValue !== currentValueRef.current) {
+        setCurrentValue(interpolatedValue)
+        currentValueRef.current = interpolatedValue
+      }
 
-      return () => {
-        if (animationRef.current) {
-          cancelAnimationFrame(animationRef.current)
-        }
+      if (progress < 1) {
+        animationRef.current = requestAnimationFrame(animate)
+      } else {
+        setCurrentValue(endValue)
+        currentValueRef.current = endValue
+        setIsAnimating(false)
       }
     }
-  }, [value, currentValue, duration, hasChanged])
+
+    animationRef.current = requestAnimationFrame(animate)
+
+    return () => {
+      if (animationRef.current) cancelAnimationFrame(animationRef.current)
+    }
+  }, [value, duration, decimals])
 
   const formatValue = (val: number) => {
     if (formatFn) {
@@ -80,6 +86,7 @@ export function AnimatedNumber({
   }
 
   const getColorClass = () => {
+    const hasChanged = value !== currentValueRef.current
     if (!isAnimating && !hasChanged) return ""
     if (isIncreasing) return "text-green-500"
     if (isDecreasing) return "text-red-500"
