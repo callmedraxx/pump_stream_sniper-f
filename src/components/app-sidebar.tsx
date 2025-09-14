@@ -84,7 +84,7 @@ export function AppSidebar({ filters, onSaveFilters, ...props }: AppSidebarProps
           <div className="space-y-3">
             <h3 className="text-sm font-semibold text-white">Trading</h3>
             <div className="space-y-2">
-              <Label htmlFor="maxBuy" className="text-xs text-gray-600 dark:text-gray-400">Max Buy Amount</Label>
+              <Label htmlFor="maxBuy" className="text-xs text-gray-400">Max Buy Amount</Label>
               <Input
                 id="maxBuy"
                 type="number"
@@ -95,7 +95,7 @@ export function AppSidebar({ filters, onSaveFilters, ...props }: AppSidebarProps
               />
             </div>
             <div className="flex items-center justify-between">
-              <Label htmlFor="autoSnipe" className="text-xs text-gray-600 dark:text-gray-400">Auto Snipe</Label>
+              <Label htmlFor="autoSnipe" className="text-xs text-gray-400">Auto Snipe</Label>
               <Switch
                 id="autoSnipe"
                 checked={autoSnipe}
@@ -115,7 +115,7 @@ export function AppSidebar({ filters, onSaveFilters, ...props }: AppSidebarProps
             {/* Filter Grid - 2 columns for better space usage */}
             <div className="grid grid-cols-2 gap-2">
               <div className="space-y-1">
-                <Label htmlFor="minViewers" className="text-xs text-gray-600 dark:text-gray-400">Min Viewers</Label>
+                <Label htmlFor="minViewers" className="text-xs text-gray-400">Min Viewers</Label>
                 <Input 
                   id="minViewers" 
                   type="number" 
@@ -127,7 +127,7 @@ export function AppSidebar({ filters, onSaveFilters, ...props }: AppSidebarProps
               </div>
               
               <div className="space-y-1">
-                <Label htmlFor="minTraders" className="text-xs text-gray-600 dark:text-gray-400">Min Traders</Label>
+                <Label htmlFor="minTraders" className="text-xs text-gray-400">Min Traders</Label>
                 <Input 
                   id="minTraders" 
                   type="number" 
@@ -139,7 +139,7 @@ export function AppSidebar({ filters, onSaveFilters, ...props }: AppSidebarProps
               </div>
               
               <div className="space-y-1">
-                <Label htmlFor="minUsdMarketCap" className="text-xs text-gray-600 dark:text-gray-400">Min Market Cap</Label>
+                <Label htmlFor="minUsdMarketCap" className="text-xs text-gray-400">Min Market Cap</Label>
                 <Input 
                   id="minUsdMarketCap" 
                   type="number" 
@@ -151,7 +151,7 @@ export function AppSidebar({ filters, onSaveFilters, ...props }: AppSidebarProps
               </div>
               
               <div className="space-y-1">
-                <Label htmlFor="minAgeDays" className="text-xs text-gray-600 dark:text-gray-400">Min Age (days)</Label>
+                <Label htmlFor="minAgeDays" className="text-xs text-gray-400">Min Age (days)</Label>
                 <Input 
                   id="minAgeDays" 
                   type="number" 
@@ -163,7 +163,7 @@ export function AppSidebar({ filters, onSaveFilters, ...props }: AppSidebarProps
               </div>
               
               <div className="space-y-1">
-                <Label htmlFor="minVolume24h" className="text-xs text-gray-600 dark:text-gray-400">Min Volume 24h</Label>
+                <Label htmlFor="minVolume24h" className="text-xs text-gray-400">Min Volume 24h</Label>
                 <Input 
                   id="minVolume24h" 
                   type="number" 
@@ -175,7 +175,7 @@ export function AppSidebar({ filters, onSaveFilters, ...props }: AppSidebarProps
               </div>
               
               <div className="space-y-1">
-                <Label htmlFor="minTxns24h" className="text-xs text-gray-600 dark:text-gray-400">Min Txns 24h</Label>
+                <Label htmlFor="minTxns24h" className="text-xs text-gray-400">Min Txns 24h</Label>
                 <Input 
                   id="minTxns24h" 
                   type="number" 
@@ -189,7 +189,7 @@ export function AppSidebar({ filters, onSaveFilters, ...props }: AppSidebarProps
 
             {/* Full width inputs */}
             <div className="space-y-2">
-              <Label htmlFor="creatorContains" className="text-xs text-gray-600 dark:text-gray-400">Creator Contains</Label>
+              <Label htmlFor="creatorContains" className="text-xs text-gray-400">Creator Contains</Label>
               <Input 
                 id="creatorContains" 
                 type="text" 
@@ -202,7 +202,7 @@ export function AppSidebar({ filters, onSaveFilters, ...props }: AppSidebarProps
 
             {/* Switch for migration filter */}
             <div className="flex items-center justify-between py-1">
-              <Label htmlFor="excludeMigrated" className="text-xs text-gray-600 dark:text-gray-400">Show only migrated tokens</Label>
+              <Label htmlFor="excludeMigrated" className="text-xs text-gray-400">Show only migrated tokens</Label>
               <Switch 
                 id="excludeMigrated" 
                 checked={excludeMigrated} 
