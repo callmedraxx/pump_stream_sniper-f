@@ -12,6 +12,7 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Skeleton } from "@/components/ui/skeleton"
 import { useWebsocket } from "@/hooks/use-websocket"
 import { useTokenSorting } from "@/hooks/useTokenSorting"
+import { useTokenFiltering } from "@/hooks/useTokenFiltering"
 import { LiveToken } from "@/types/token.types"
 import { TableHeader } from "../../components/TableHeader"
 import { TokenTableRow } from "../../components/TokenTableRow"
@@ -32,6 +33,8 @@ export default function Page() {
 
   // Use the sorting hook
   const { persistentSort, saveSortPreferences, sortTokens } = useTokenSorting()
+  // Use the filtering hook
+  const { persistentFilters, saveFilters, filterTokens } = useTokenFiltering()
 
   const [isLoading, setIsLoading] = useState<boolean>(true)
   const [uiSelection, setUiSelection] = useState<string>('24h') // UI selection: time period or 'trending'
@@ -56,11 +59,12 @@ export default function Page() {
     return () => clearTimeout(timer)
   }, [])
 
-  // Create sorted tokens for display
+  // Apply filters first, then sorting for display
   const sortedTokens = useMemo(() => {
     if (liveTokens.length === 0) return liveTokens
-    return sortTokens(liveTokens)
-  }, [liveTokens, persistentSort.sortBy, persistentSort.sortOrder, persistentSort.dataTimePeriod, sortTokens])
+    const filtered = filterTokens(liveTokens)
+    return sortTokens(filtered)
+  }, [liveTokens, persistentSort.sortBy, persistentSort.sortOrder, persistentSort.dataTimePeriod, sortTokens, filterTokens])
 
   // Calculate pagination values
   const totalPages = Math.ceil(sortedTokens.length / itemsPerPage)
@@ -127,7 +131,7 @@ export default function Page() {
         } as React.CSSProperties
       }
     >
-      <AppSidebar variant="inset" />
+  <AppSidebar variant="inset" filters={persistentFilters ?? undefined} onSaveFilters={saveFilters} />
       <SidebarInset>
         <SiteHeader />
         <div className="flex flex-1 flex-col">
