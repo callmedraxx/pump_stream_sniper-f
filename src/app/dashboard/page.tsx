@@ -1,6 +1,8 @@
 "use client"
 
 import { useEffect, useState, useMemo } from "react"
+import { useWallet } from '@solana/wallet-adapter-react'
+import { toast } from 'sonner' 
 import { AppSidebar } from "@/components/app-sidebar"
 import { SiteHeader } from "@/components/site-header"
 import {
@@ -88,6 +90,7 @@ export default function Page() {
 
   // Trading handlers (UI wiring)
   const [quickSellPercent, setQuickSellPercent] = useState<number | undefined>(undefined)
+  const wallet = useWallet()
 
   // Read persisted quick sell percent only on the client after mount to avoid
   // server/client markup mismatch (hydration errors).
@@ -99,6 +102,12 @@ export default function Page() {
   }, [])
 
   const handleBuy = (token: LiveToken) => {
+    // Ensure wallet is connected
+    if (!wallet || !wallet.connected) {
+      toast.error('Please connect your Solana wallet first')
+      return
+    }
+
     // Read buy amount from localStorage (set by sidebar) as a quick wiring point
     let amountSOL = 0
     try {
@@ -112,6 +121,10 @@ export default function Page() {
   }
 
   const handleSell = (token: LiveToken, percent?: number) => {
+    if (!wallet || !wallet.connected) {
+      toast.error('Please connect your Solana wallet first')
+      return
+    }
     const p = typeof percent === 'number' ? percent : (quickSellPercent ?? 25)
     console.log('Sell requested', token.token_info.symbol, 'percent=', p)
     // TODO: integrate with wallet + prepareSellTransaction

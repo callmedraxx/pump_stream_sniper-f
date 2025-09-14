@@ -170,6 +170,34 @@
   box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
 }
 
+/* Sonner error toast styling and top-right placement */
+.toaster {
+  /* ensure toaster container is high z-index */
+  z-index: 9999;
+}
+
+/* Sonner renders different classnames depending on version; target common ones */
+/* .snackbar or .sn-toast or .toast */
+.toaster .sn-toast[data-type="error"],
+.toaster .snackbar[data-type="error"],
+.toaster .toast[data-type="error"] {
+  background: var(--error-bg) !important;
+  color: var(--error-text) !important;
+  border-color: rgba(0,0,0,0.06) !important;
+}
+
+/* If Sonner uses a root container with top/bottom positions, ensure top-right placement */
+
+
+/* Position the Toaster at top-right via the Sonner component's position prop; fallback */
+div[role="status"][style*="bottom:"] {
+  /* If Sonner attempted bottom positioning, override to top-right */
+  bottom: auto !important;
+  top: 1rem !important;
+  right: 1rem !important;
+  left: auto !important;
+}
+
 .table-border {
   border: 1px solid hsl(var(--border));
 }
