@@ -86,6 +86,37 @@ export default function Page() {
     ).length
   }
 
+  // Trading handlers (UI wiring)
+  const [quickSellPercent, setQuickSellPercent] = useState<number | undefined>(undefined)
+
+  // Read persisted quick sell percent only on the client after mount to avoid
+  // server/client markup mismatch (hydration errors).
+  useEffect(() => {
+    try {
+      const v = localStorage.getItem('quickSellPercent')
+      if (v) setQuickSellPercent(Number(v))
+    } catch (e) {}
+  }, [])
+
+  const handleBuy = (token: LiveToken) => {
+    // Read buy amount from localStorage (set by sidebar) as a quick wiring point
+    let amountSOL = 0
+    try {
+      const s = localStorage.getItem('buyAmountSOL')
+      amountSOL = s ? Number(s) : 0
+    } catch(e) {
+      amountSOL = 0
+    }
+    console.log('Buy requested', token.token_info.symbol, 'amountSOL=', amountSOL)
+    // TODO: integrate with wallet + prepareBuyTransaction
+  }
+
+  const handleSell = (token: LiveToken, percent?: number) => {
+    const p = typeof percent === 'number' ? percent : (quickSellPercent ?? 25)
+    console.log('Sell requested', token.token_info.symbol, 'percent=', p)
+    // TODO: integrate with wallet + prepareSellTransaction
+  }
+
   const handleSortToggle = (column: string) => {
     let newSortOrder: 'asc' | 'desc' = 'desc'
     
@@ -131,7 +162,7 @@ export default function Page() {
         } as React.CSSProperties
       }
     >
-  <AppSidebar variant="inset" filters={persistentFilters ?? undefined} onSaveFilters={saveFilters} />
+  <AppSidebar variant="inset" filters={persistentFilters ?? undefined} onSaveFilters={saveFilters} quickSellPercent={quickSellPercent} onQuickSellChange={(p) => setQuickSellPercent(p)} />
       <SidebarInset>
         <SiteHeader />
         <div className="flex flex-1 flex-col">
@@ -196,6 +227,9 @@ export default function Page() {
                               dataTimePeriod={dataTimePeriod}
                               persistentSort={persistentSort}
                               getCreatorCount={getCreatorCount}
+                              onBuy={handleBuy}
+                                onSell={handleSell}
+                                selectedQuickSellPercent={quickSellPercent}
                             />
                           ))
                         )}

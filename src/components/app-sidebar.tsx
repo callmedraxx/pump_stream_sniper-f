@@ -21,10 +21,12 @@ import {
 interface AppSidebarProps extends React.ComponentProps<typeof Sidebar> {
   filters?: FilterPreferences | null
   onSaveFilters?: (filters: FilterPreferences | null) => void
+  quickSellPercent?: number
+  onQuickSellChange?: (p: number) => void
 }
 
-export function AppSidebar({ filters, onSaveFilters, ...props }: AppSidebarProps) {
-  const [maxBuyAmount, setMaxBuyAmount] = React.useState("")
+export function AppSidebar({ filters, onSaveFilters, quickSellPercent, onQuickSellChange, ...props }: AppSidebarProps) {
+  const [buyAmountSOL, setBuyAmountSOL] = React.useState("")
   const [autoSnipe, setAutoSnipe] = React.useState(false)
   const [minViewers, setMinViewers] = React.useState<number | undefined>(filters?.minViewers)
   const [minTraders, setMinTraders] = React.useState<number | undefined>(filters?.minTraders)
@@ -60,6 +62,20 @@ export function AppSidebar({ filters, onSaveFilters, ...props }: AppSidebarProps
     })
   }
 
+  // Persist buy amount and quick sell selection for UI wiring
+  React.useEffect(() => {
+    try {
+      if (buyAmountSOL) localStorage.setItem('buyAmountSOL', buyAmountSOL)
+      else localStorage.removeItem('buyAmountSOL')
+    } catch (e) {}
+  }, [buyAmountSOL])
+
+  // Track mount so we don't apply client-only selected styles during SSR
+  const [mounted, setMounted] = React.useState(false)
+  React.useEffect(() => {
+    setMounted(true)
+  }, [])
+
   return (
     <Sidebar collapsible="offcanvas" {...props}>
       <SidebarHeader>
@@ -81,27 +97,49 @@ export function AppSidebar({ filters, onSaveFilters, ...props }: AppSidebarProps
       <SidebarContent className="overflow-y-auto">
         <div className="p-3 space-y-4">
           {/* Trading Section */}
-          <div className="space-y-3">
+            <div className="space-y-3">
             <h3 className="text-sm font-semibold text-white">Trading</h3>
             <div className="space-y-2">
-              <Label htmlFor="maxBuy" className="text-xs text-gray-400">Max Buy Amount</Label>
+              <Label htmlFor="buyAmountSOL" className="text-xs text-gray-400">Buy amount (SOL)</Label>
               <Input
-                id="maxBuy"
+                id="buyAmountSOL"
                 type="number"
+                step="0.01"
                 placeholder="0.1"
-                value={maxBuyAmount}
-                onChange={(e) => setMaxBuyAmount(e.target.value)}
+                value={buyAmountSOL}
+                onChange={(e) => setBuyAmountSOL(e.target.value)}
                 className="h-8 text-sm"
               />
-            </div>
-            <div className="flex items-center justify-between">
-              <Label htmlFor="autoSnipe" className="text-xs text-gray-400">Auto Snipe</Label>
-              <Switch
-                id="autoSnipe"
-                checked={autoSnipe}
-                onCheckedChange={setAutoSnipe}
-                className="scale-75"
-              />
+              <div className="flex items-center gap-2 pt-1">
+                <Label className="text-xs text-gray-400">Quick Sell %</Label>
+                <div className="flex gap-1">
+                  {[25,50,75,100].map(p => {
+                    const isSelected = quickSellPercent === p
+                    const baseClass = "text-xs px-2 py-1 rounded"
+                    const selectedClass = "bg-red-600 hover:bg-red-700 text-white"
+                    const unselectedClass = "bg-gray-200 dark:bg-muted/30 text-gray-800 dark:text-gray-200 hover:bg-gray-300"
+                    // Only render the selected (red) style after the component is mounted
+                    const appliedClass = mounted && isSelected ? `${baseClass} ${selectedClass}` : `${baseClass} ${unselectedClass}`
+                    return (
+                      <button
+                        key={p}
+                        type="button"
+                        onClick={() => {
+                          try {
+                            onQuickSellChange?.(p)
+                            // still persist for page init fallback
+                            localStorage.setItem('quickSellPercent', String(p))
+                          } catch(e){}
+                        }}
+                        className={appliedClass}
+                        title={`Sell ${p}%`}
+                      >
+                        {p}%
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
             </div>
           </div>
 

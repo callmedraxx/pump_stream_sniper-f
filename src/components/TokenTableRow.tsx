@@ -14,6 +14,11 @@ interface TokenTableRowProps {
   dataTimePeriod: string
   persistentSort: SortPreferences
   getCreatorCount: (creator: string) => number
+  // Callbacks for trading actions (UI wiring only)
+  onBuy?: (token: LiveToken) => void
+  onSell?: (token: LiveToken, percent: number) => void
+  // UI helper: selected quick sell percent from sidebar
+  selectedQuickSellPercent?: number
 }
 
 export function TokenTableRow({ 
@@ -22,7 +27,10 @@ export function TokenTableRow({
   startIndex, 
   dataTimePeriod, 
   persistentSort,
-  getCreatorCount 
+  getCreatorCount,
+  onBuy,
+  onSell,
+  selectedQuickSellPercent,
 }: TokenTableRowProps) {
   return (
     <tr 
@@ -64,6 +72,35 @@ export function TokenTableRow({
               </div>
               <div className="text-xs text-muted-foreground truncate">
                 ${token.token_info.symbol || 'UNKNOWN'}
+              </div>
+              {/* Buy / Sell buttons under the symbol */}
+              <div className="mt-2 flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.preventDefault()
+                    e.stopPropagation()
+                    onBuy?.(token)
+                  }}
+                  className="text-xs px-2 py-1 rounded bg-emerald-600 hover:bg-emerald-700 text-white"
+                  title="Buy"
+                >
+                  Buy
+                </button>
+                <div className="flex items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.preventDefault()
+                      e.stopPropagation()
+                      onSell?.(token, selectedQuickSellPercent ?? 25)
+                    }}
+                    className="text-xs px-2 py-1 rounded bg-red-600 hover:bg-red-700 text-white"
+                    title={`Sell ${selectedQuickSellPercent ?? 25}%`}
+                  >
+                    Sell {selectedQuickSellPercent ?? 25}%
+                  </button>
+                </div>
               </div>
             </div>
           </div>
