@@ -1,4 +1,6 @@
 "use client"
+export const runtime = 'edge'
+
 
 import { useEffect, useState, useMemo } from "react"
 import { useWallet, useConnection } from '@solana/wallet-adapter-react'
@@ -13,7 +15,6 @@ import {
   SidebarProvider,
 } from "@/components/ui/sidebar"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Skeleton } from "@/components/ui/skeleton"
 import { useWebsocket } from "@/hooks/use-websocket"
 import { useTokenSorting } from "@/hooks/useTokenSorting"
 import { useTokenFiltering } from "@/hooks/useTokenFiltering"
