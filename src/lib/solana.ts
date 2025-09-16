@@ -9,8 +9,6 @@ import {
 } from '@solana/web3.js'
 import { 
   TOKEN_PROGRAM_ID, 
-  getOrCreateAssociatedTokenAccount, 
-  createTransferInstruction,
   getAssociatedTokenAddress,
   createAssociatedTokenAccountInstruction,
   ASSOCIATED_TOKEN_PROGRAM_ID

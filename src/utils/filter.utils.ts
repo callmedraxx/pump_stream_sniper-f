@@ -92,6 +92,8 @@ export function applyFilters(tokens: LiveToken[], filters: FilterPreferences | n
   })
 }
 
-export default {
-  applyFilters
+const filterUtils = {
+  applyFilters,
 }
+
+export default filterUtils
