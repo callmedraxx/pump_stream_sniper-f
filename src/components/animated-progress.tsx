@@ -14,7 +14,7 @@ interface AnimatedProgressProps {
 export function AnimatedProgress({
   value,
   previousValue,
-  duration = 1500,
+  duration = 3000,
   className = "",
   showPercentage = false
 }: AnimatedProgressProps) {

@@ -1,8 +1,7 @@
 "use client"
 
 import { useEffect, useRef, useState, useCallback } from 'react'
-import { tokenStorage } from '@/lib/token-storage'
-import type { TokenData } from '@/lib/token-storage'
+
 
 interface LiveToken {
   token_info: any
@@ -331,20 +330,20 @@ class WebSocketService {
         this.tokens = transformed
 
         // Update token storage
-        const tokenData: TokenData = {
-          event: msg.event || 'live_tokens_update',
-          timestamp: msg.timestamp || new Date().toISOString(),
-          token_count: transformed.length,
-          data: transformed,
-          last_sse_update: new Date().toISOString(),
-          backend_total_count: transformed.length
-        }
+        // const tokenData: TokenData = {
+        //   event: msg.event || 'live_tokens_update',
+        //   timestamp: msg.timestamp || new Date().toISOString(),
+        //   token_count: transformed.length,
+        //   data: transformed,
+        //   last_sse_update: new Date().toISOString(),
+        //   backend_total_count: transformed.length
+        // }
 
-        try {
-          tokenStorage.setTokens(tokenData)
-        } catch (error) {
-          console.error('[WebSocketService] error saving to storage:', error)
-        }
+        // try {
+        //   tokenStorage.setTokens(tokenData)
+        // } catch (error) {
+        //   console.error('[WebSocketService] error saving to storage:', error)
+        // }
 
         // Notify all subscribers
         this.listeners.forEach(callback => {

@@ -16,7 +16,7 @@ interface AnimatedNumberProps {
 export function AnimatedNumber({
   value,
   previousValue,
-  duration = 1000,
+  duration = 3000,
   className = "",
   prefix = "",
   suffix = "",
