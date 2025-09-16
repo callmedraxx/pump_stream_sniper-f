@@ -1,8 +1,11 @@
 "use client"
 
 import { useEffect, useState, useMemo } from "react"
-import { useWallet } from '@solana/wallet-adapter-react'
-import { toast } from 'sonner' 
+import { useWallet, useConnection } from '@solana/wallet-adapter-react'
+import { PublicKey } from '@solana/web3.js'
+import { toast } from 'sonner'
+import { executeBuyTransaction, executeSellTransaction, callVibeRpc } from '@/lib/solana'
+import { getAssociatedTokenAddress, TOKEN_PROGRAM_ID, ASSOCIATED_TOKEN_PROGRAM_ID } from '@solana/spl-token'
 import { AppSidebar } from "@/components/app-sidebar"
 import { SiteHeader } from "@/components/site-header"
 import {
@@ -10,15 +13,16 @@ import {
   SidebarProvider,
 } from "@/components/ui/sidebar"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
-// import { TokenDebugPanel } from "@/components/token-debug-panel"
 import { Skeleton } from "@/components/ui/skeleton"
 import { useWebsocket } from "@/hooks/use-websocket"
 import { useTokenSorting } from "@/hooks/useTokenSorting"
 import { useTokenFiltering } from "@/hooks/useTokenFiltering"
+import { useSolBalance } from "@/hooks/useSolBalance"
 import { LiveToken } from "@/types/token.types"
 import { TableHeader } from "../../components/TableHeader"
 import { TokenTableRow } from "../../components/TokenTableRow"
 import { PaginationControls } from "../../components/PaginationControls"
+import { SolBalanceSidebar } from "../../components/SolBalanceSidebar"
 
 export default function Page() {
   // Use the SSE hook for real-time token data
@@ -37,6 +41,9 @@ export default function Page() {
   const { persistentSort, saveSortPreferences, sortTokens } = useTokenSorting()
   // Use the filtering hook
   const { persistentFilters, saveFilters, filterTokens } = useTokenFiltering()
+
+  // Use the SOL balance hook
+  const { sol: walletSolBalance, error: balanceError } = useSolBalance()
 
   const [isLoading, setIsLoading] = useState<boolean>(true)
   const [uiSelection, setUiSelection] = useState<string>('24h') // UI selection: time period or 'trending'
@@ -88,9 +95,11 @@ export default function Page() {
     ).length
   }
 
-  // Trading handlers (UI wiring)
+  // Trading handlers with real VibeStation integration
   const [quickSellPercent, setQuickSellPercent] = useState<number | undefined>(undefined)
+  const [isTrading, setIsTrading] = useState<boolean>(false)
   const wallet = useWallet()
+  const { connection } = useConnection()
 
   // Read persisted quick sell percent only on the client after mount to avoid
   // server/client markup mismatch (hydration errors).
@@ -101,14 +110,19 @@ export default function Page() {
     } catch (e) {}
   }, [])
 
-  const handleBuy = (token: LiveToken) => {
+  const handleBuy = async (token: LiveToken) => {
     // Ensure wallet is connected
-    if (!wallet || !wallet.connected) {
+    if (!wallet || !wallet.connected || !wallet.publicKey) {
       toast.error('Please connect your Solana wallet first')
       return
     }
 
-    // Read buy amount from localStorage (set by sidebar) as a quick wiring point
+    if (isTrading) {
+      toast.error('Please wait for the current transaction to complete')
+      return
+    }
+
+    // Read buy amount from localStorage (set by sidebar)
     let amountSOL = 0
     try {
       const s = localStorage.getItem('buyAmountSOL')
@@ -116,18 +130,172 @@ export default function Page() {
     } catch(e) {
       amountSOL = 0
     }
+
+    if (amountSOL <= 0) {
+      toast.error('Please set a valid buy amount in the sidebar')
+      return
+    }
+
     console.log('Buy requested', token.token_info.symbol, 'amountSOL=', amountSOL)
-    // TODO: integrate with wallet + prepareBuyTransaction
+    setIsTrading(true)
+
+    try {
+      // Check wallet SOL balance before attempting transaction
+      if (balanceError) {
+        toast.error('Unable to fetch wallet balance. Please try again.')
+        setIsTrading(false)
+        return
+      }
+      
+      if (walletSolBalance < amountSOL) {
+        toast.error('Insufficient SOL balance for this buy amount')
+        setIsTrading(false)
+        return
+      }
+
+      // Extract token metadata for better migration detection
+      const tokenData = {
+        raydiumPool: token.pool_info.raydium_pool,
+        pumpSwapPool: (token.raw_data as any)?.pump_swap_pool || null,
+        complete: token.pool_info.complete
+      }
+
+      const result = await executeBuyTransaction(
+        connection, 
+        wallet, 
+        token.token_info.mint, 
+        amountSOL,
+        { 
+          simulate: true, // Enable simulation for safety
+          tokenData
+        }
+      )
+
+      toast.success(
+        <div className="flex flex-col gap-1">
+          <span>✅ Successfully bought {token.token_info.symbol}!</span>
+          <a 
+            href={result.explorerUrl} 
+            target="_blank" 
+            rel="noopener noreferrer"
+            className="text-blue-500 hover:text-blue-700 underline text-sm"
+          >
+            View Transaction
+          </a>
+        </div>
+      )
+
+      console.log('Buy successful:', result)
+    } catch (e: any) {
+      console.error('Buy failed:', e)
+      const errorMessage = e?.message || 'Buy transaction failed'
+      toast.error(
+        <div className="flex flex-col gap-1">
+          <span>❌ Buy Failed</span>
+          <span className="text-sm text-gray-600">{errorMessage}</span>
+        </div>
+      )
+    } finally {
+      setIsTrading(false)
+    }
   }
 
-  const handleSell = (token: LiveToken, percent?: number) => {
-    if (!wallet || !wallet.connected) {
+  const handleSell = async (token: LiveToken, percent?: number) => {
+    if (!wallet || !wallet.connected || !wallet.publicKey) {
       toast.error('Please connect your Solana wallet first')
       return
     }
-    const p = typeof percent === 'number' ? percent : (quickSellPercent ?? 25)
-    console.log('Sell requested', token.token_info.symbol, 'percent=', p)
-    // TODO: integrate with wallet + prepareSellTransaction
+
+    if (isTrading) {
+      toast.error('Please wait for the current transaction to complete')
+      return
+    }
+
+    const sellPercent = typeof percent === 'number' ? percent : (quickSellPercent ?? 25)
+    console.log('Sell requested', token.token_info.symbol, 'percent=', sellPercent)
+    setIsTrading(true)
+
+    try {
+      // Check token balance before attempting transaction
+      try {
+        const mintPubkey = new PublicKey(token.token_info.mint)
+        const associatedTokenAddress = await getAssociatedTokenAddress(
+          mintPubkey,
+          wallet.publicKey,
+          false,
+          TOKEN_PROGRAM_ID,
+          ASSOCIATED_TOKEN_PROGRAM_ID
+        )
+
+        const tokenBalance = await callVibeRpc('getTokenAccountBalance', [
+          associatedTokenAddress.toString(),
+          { commitment: 'finalized' }
+        ])
+
+        if (!tokenBalance?.value?.amount || BigInt(tokenBalance.value.amount) === BigInt(0)) {
+          toast.error('No tokens to sell')
+          setIsTrading(false)
+          return
+        }
+
+        const currentBalance = BigInt(tokenBalance.value.amount)
+        const sellAmount = (currentBalance * BigInt(sellPercent)) / BigInt(100)
+
+        if (sellAmount === BigInt(0)) {
+          toast.error('Token amount too small to sell at this percentage')
+          setIsTrading(false)
+          return
+        }
+      } catch (balErr) {
+        console.warn('Failed to fetch token balance, proceeding with caution', balErr)
+        // Continue anyway, let the transaction handle it
+      }
+
+      // Extract token metadata for better migration detection
+      const tokenData = {
+        raydiumPool: token.pool_info.raydium_pool,
+        pumpSwapPool: (token.raw_data as any)?.pump_swap_pool || null,
+        complete: token.pool_info.complete
+      }
+
+      const result = await executeSellTransaction(
+        connection, 
+        wallet, 
+        token.token_info.mint, 
+        sellPercent,
+        { 
+          simulate: true, // Enable simulation for safety
+          tokenData
+        }
+      )
+
+      toast.success(
+        <div className="flex flex-col gap-1">
+          <span>✅ Successfully sold {sellPercent}% of {token.token_info.symbol}!</span>
+          <a 
+            href={result.explorerUrl} 
+            target="_blank" 
+            rel="noopener noreferrer"
+            className="text-blue-500 hover:text-blue-700 underline text-sm"
+          >
+            View Transaction
+          </a>
+        </div>
+      )
+
+      console.log('Sell successful:', result)
+    } catch (e: any) {
+      console.error('Sell failed:', e)
+      const errorMessage = e?.message || 'Sell transaction failed'
+      toast.error(
+        <div className="flex flex-col gap-1">
+          <span>❌ Sell Failed</span>
+          <span className="text-sm text-gray-600">{errorMessage}</span>
+        </div>
+      )
+    } finally {
+      setIsTrading(false)
+    }
   }
 
   const handleSortToggle = (column: string) => {
@@ -175,12 +343,37 @@ export default function Page() {
         } as React.CSSProperties
       }
     >
-  <AppSidebar variant="inset" filters={persistentFilters ?? undefined} onSaveFilters={saveFilters} quickSellPercent={quickSellPercent} onQuickSellChange={(p) => setQuickSellPercent(p)} />
+      <AppSidebar 
+        variant="inset" 
+        filters={persistentFilters ?? undefined} 
+        onSaveFilters={saveFilters} 
+        quickSellPercent={quickSellPercent} 
+        onQuickSellChange={(p) => setQuickSellPercent(p)} 
+      />
       <SidebarInset>
         <SiteHeader />
         <div className="flex flex-1 flex-col">
           <div className="@container/main flex flex-1 flex-col gap-2">
             <div className="flex flex-col gap-4 py-4 md:gap-6 md:py-6 px-4">
+              {/* Connection Status */}
+              <div className="flex items-center justify-between p-3 bg-muted/30 rounded-lg border">
+                <div className="flex items-center gap-2">
+                  {wallet.connected && (
+                    <>
+                      <div className="w-2 h-2 rounded-full bg-green-500 ml-4" />
+                      <span className="text-sm text-muted-foreground">
+                        Wallet: Connected
+                      </span>
+                    </>
+                  )}
+                </div>
+                {isTrading && (
+                  <div className="flex items-center gap-2">
+                    <div className="animate-spin rounded-full h-4 w-4 border-2 border-blue-500 border-t-transparent" />
+                    <span className="text-sm text-blue-500">Processing transaction...</span>
+                  </div>
+                )}
+              </div>
               {/* Time Period Selector */}
               <div className="flex items-center gap-4 p-3 bg-muted/30 rounded-lg border">
                 <Tabs value={uiSelection} onValueChange={handleTimePeriodChange} className="flex-1">
@@ -241,8 +434,8 @@ export default function Page() {
                               persistentSort={persistentSort}
                               getCreatorCount={getCreatorCount}
                               onBuy={handleBuy}
-                                onSell={handleSell}
-                                selectedQuickSellPercent={quickSellPercent}
+                              onSell={handleSell}
+                              selectedQuickSellPercent={quickSellPercent}
                             />
                           ))
                         )}
@@ -265,13 +458,7 @@ export default function Page() {
           </div>
         </div>
       </SidebarInset>
-      
-      {/* Debug Panel
-      <TokenDebugPanel 
-        tokens={tokens}
-        isConnected={isConnected}
-        lastUpdate={lastUpdate}
-      /> */}
+       <SolBalanceSidebar />
     </SidebarProvider>
   )
 }
