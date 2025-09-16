@@ -131,6 +131,13 @@ const nextConfig: NextConfig = {
         port: '',
         pathname: '/**',
       },
+      // Allow direct image URLs served from IP:79.252.215.111:4141
+      {
+        protocol: 'http',
+        hostname: '79.252.215.111',
+        port: '4141',
+        pathname: '/static/images/**',
+      },
     ],
   },
 };

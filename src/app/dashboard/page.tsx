@@ -2,7 +2,7 @@
 export const runtime = 'edge'
 
 
-import { useEffect, useState, useMemo } from "react"
+import { useEffect, useState, useMemo, useRef, useCallback } from "react"
 import { useWallet, useConnection } from '@solana/wallet-adapter-react'
 import { PublicKey } from '@solana/web3.js'
 import { toast } from 'sonner'
@@ -25,6 +25,99 @@ import { TokenTableRow } from "../../components/TokenTableRow"
 import { PaginationControls } from "../../components/PaginationControls"
 import { SolBalanceSidebar } from "../../components/SolBalanceSidebar"
 
+// Audio Context Hook
+const useAudioContext = () => {
+  const audioCtxRef = useRef<AudioContext | null>(null)
+  const isUnlockedRef = useRef<boolean>(false)
+  
+  // Initialize audio context on first user interaction
+  useEffect(() => {
+    const initAudio = async () => {
+      try {
+        const AudioCtxClass = (window as any).AudioContext || (window as any).webkitAudioContext
+        if (!AudioCtxClass || audioCtxRef.current) return
+        
+        audioCtxRef.current = new AudioCtxClass()
+
+        // Try to resume immediately if possible (guard for null)
+        const ctx = audioCtxRef.current
+        if (ctx && ctx.state === 'suspended') {
+          await ctx.resume()
+        }
+        
+        isUnlockedRef.current = true
+      } catch (error) {
+        console.warn('Could not initialize audio context:', error)
+      }
+    }
+
+    // Set up listeners for user gestures
+    const handleUserGesture = () => {
+      if (!isUnlockedRef.current) {
+        initAudio()
+      }
+    }
+
+    // Listen for any user interaction
+    document.addEventListener('click', handleUserGesture, { once: true })
+    document.addEventListener('keydown', handleUserGesture, { once: true })
+    document.addEventListener('touchstart', handleUserGesture, { once: true })
+
+    return () => {
+      document.removeEventListener('click', handleUserGesture)
+      document.removeEventListener('keydown', handleUserGesture)
+      document.removeEventListener('touchstart', handleUserGesture)
+    }
+  }, [])
+
+  const playSound = useCallback((frequency = 880, duration = 0.14, volume = 0.08) => {
+    try {
+      if (!audioCtxRef.current || !isUnlockedRef.current) {
+        console.log('Audio context not ready, trying fallback...')
+        // Fallback to simple audio element
+        const audio = new Audio('data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2/LDciUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvmocBzuR1/LNeSsFJH')
+        audio.volume = volume
+        audio.play().catch(() => {})
+        return
+      }
+
+      const ctx = audioCtxRef.current
+      
+      if (ctx.state === 'suspended') {
+        ctx.resume().then(() => {
+          // Retry playing after resume
+          playActualSound(ctx, frequency, duration, volume)
+        }).catch(() => {})
+        return
+      }
+
+      playActualSound(ctx, frequency, duration, volume)
+    } catch (error) {
+      console.warn('Audio playback failed:', error)
+    }
+  }, [])
+
+  const playActualSound = (ctx: AudioContext, frequency: number, duration: number, volume: number) => {
+    const oscillator = ctx.createOscillator()
+    const gainNode = ctx.createGain()
+    
+    oscillator.connect(gainNode)
+    gainNode.connect(ctx.destination)
+    
+    oscillator.type = 'sine'
+    oscillator.frequency.setValueAtTime(frequency, ctx.currentTime)
+    
+    gainNode.gain.setValueAtTime(0, ctx.currentTime)
+    gainNode.gain.linearRampToValueAtTime(volume, ctx.currentTime + 0.01)
+    gainNode.gain.linearRampToValueAtTime(0, ctx.currentTime + duration)
+    
+    oscillator.start(ctx.currentTime)
+    oscillator.stop(ctx.currentTime + duration)
+  }
+
+  return { playSound, isReady: isUnlockedRef.current }
+}
+
 export default function Page() {
   // Use the SSE hook for real-time token data
   const {
@@ -46,10 +139,61 @@ export default function Page() {
   // Use the SOL balance hook
   const { sol: walletSolBalance, error: balanceError } = useSolBalance()
 
+  // Use the audio hook
+  const { playSound, isReady } = useAudioContext()
+
   const [isLoading, setIsLoading] = useState<boolean>(true)
   const [uiSelection, setUiSelection] = useState<string>('24h') // UI selection: time period or 'trending'
   const [dataTimePeriod, setDataTimePeriod] = useState<string>('24h') // Actual time period for data display
   const [tokens, setTokens] = useState<LiveToken[]>([])
+
+  // Search state for filtering tokens by symbol, name, or mint
+  const [searchQuery, setSearchQuery] = useState<string>('')
+
+  // Keep a ref of previous token mint set to detect newly added tokens
+  const prevTokenMintsRef = useRef<Set<string>>(new Set())
+
+  // Simple sound enabled state
+  const [soundEnabled, setSoundEnabled] = useState(true)
+
+  // Detect newly added migrated tokens and notify the user
+  useEffect(() => {
+    try {
+      const prevSet = prevTokenMintsRef.current
+      const newlyAdded: LiveToken[] = []
+
+      for (const t of liveTokens) {
+        const mint = t.token_info?.mint
+        if (!mint) continue
+        const isMigrated = !!t.pool_info?.complete
+        if (!prevSet.has(mint) && isMigrated) {
+          newlyAdded.push(t)
+        }
+      }
+
+      if (newlyAdded.length > 0) {
+        // Play sound if enabled and context is ready
+        if (soundEnabled && isReady) {
+          playSound(880, 0.2, 0.1) // frequency, duration, volume
+        }
+        
+        // Show toast notifications
+        newlyAdded.slice(0, 3).forEach(t => {
+          toast.success(
+            <div className="flex flex-col gap-1">
+              <span>🔔 New migrated token: {t.token_info.symbol}</span>
+              <span className="text-sm text-gray-600">{t.token_info.name}</span>
+            </div>
+          )
+        })
+      }
+
+      // Update the previous set
+      prevTokenMintsRef.current = new Set(liveTokens.map(t => t.token_info?.mint).filter(Boolean) as string[])
+    } catch (e) {
+      // swallow errors in notification logic
+    }
+  }, [liveTokens, playSound, soundEnabled, isReady])
 
   // Pagination state
   const [currentPage, setCurrentPage] = useState<number>(1)
@@ -72,7 +216,20 @@ export default function Page() {
   // Apply filters first, then sorting for display
   const sortedTokens = useMemo(() => {
     if (liveTokens.length === 0) return liveTokens
-    const filtered = filterTokens(liveTokens)
+    // Apply existing filters
+    let filtered = filterTokens(liveTokens)
+
+    // If there's a search query, further filter by symbol, name, or mint (case-insensitive)
+    const q = searchQuery.trim().toLowerCase()
+    if (q.length > 0) {
+      filtered = filtered.filter(t => {
+        const symbol = (t.token_info?.symbol || '').toLowerCase()
+        const name = (t.token_info?.name || '').toLowerCase()
+        const mint = (t.token_info?.mint || '').toLowerCase()
+        return symbol.includes(q) || name.includes(q) || mint.includes(q)
+      })
+    }
+
     return sortTokens(filtered)
   }, [liveTokens, persistentSort.sortBy, persistentSort.sortOrder, persistentSort.dataTimePeriod, sortTokens, filterTokens])
 
@@ -356,24 +513,36 @@ export default function Page() {
         <div className="flex flex-1 flex-col">
           <div className="@container/main flex flex-1 flex-col gap-2">
             <div className="flex flex-col gap-4 py-4 md:gap-6 md:py-6 px-4">
-              {/* Connection Status */}
-              <div className="flex items-center justify-between p-3 bg-muted/30 rounded-lg border">
-                <div className="flex items-center gap-2">
-                  {wallet.connected && (
-                    <>
-                      <div className="w-2 h-2 rounded-full bg-green-500 ml-4" />
-                      <span className="text-sm text-muted-foreground">
-                        Wallet: Connected
-                      </span>
-                    </>
+              {/* Search input + Connection Status (single row) */}
+              <div className="flex items-center justify-between gap-4 p-3 bg-muted/30 rounded-lg border">
+                <div className="flex items-center gap-4 flex-1">
+                  <input
+                    aria-label="Search tokens"
+                    type="search"
+                    value={searchQuery}
+                    onChange={(e) => { setSearchQuery(e.target.value); setCurrentPage(1); }}
+                    placeholder="Search by symbol, name, or mint"
+                    className="w-full max-w-lg rounded-md border px-3 py-2 bg-background text-sm"
+                  />
+                </div>
+
+                <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-2">
+                    {wallet.connected && (
+                      <>
+                        <div className="w-2 h-2 rounded-full bg-green-500 ml-4" />
+                        <span className="text-sm text-muted-foreground">Wallet: Connected</span>
+                      </>
+                    )}
+                  </div>
+
+                  {isTrading && (
+                    <div className="flex items-center gap-2">
+                      <div className="animate-spin rounded-full h-4 w-4 border-2 border-blue-500 border-t-transparent" />
+                      <span className="text-sm text-blue-500">Processing transaction...</span>
+                    </div>
                   )}
                 </div>
-                {isTrading && (
-                  <div className="flex items-center gap-2">
-                    <div className="animate-spin rounded-full h-4 w-4 border-2 border-blue-500 border-t-transparent" />
-                    <span className="text-sm text-blue-500">Processing transaction...</span>
-                  </div>
-                )}
               </div>
               {/* Time Period Selector */}
               <div className="flex items-center gap-4 p-3 bg-muted/30 rounded-lg border">
