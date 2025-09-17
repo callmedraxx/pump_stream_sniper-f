@@ -156,39 +156,66 @@ export default function Page() {
   // Simple sound enabled state
   const [soundEnabled, setSoundEnabled] = useState(true)
 
-  // Detect newly added migrated tokens and notify the user
+  // Detect newly live tokens (based on timestamps.created_at within last 20s)
   useEffect(() => {
     try {
       const prevSet = prevTokenMintsRef.current
-      const newlyAdded: LiveToken[] = []
+      const newlyLive: LiveToken[] = []
+
+  const nowMs = Date.now()
+  // Debug: snapshot of previous mints
+  try { console.debug('[notify] prevMints:', Array.from(prevSet).slice(0,20)) } catch(e){}
+      const isRecent = (createdAt: any) => {
+        if (!createdAt) return false
+        // backend may send ISO string or numeric seconds/ms
+        let tsMs = 0
+        if (typeof createdAt === 'string') {
+          const parsed = Date.parse(createdAt)
+          if (!isNaN(parsed)) tsMs = parsed
+        } else if (typeof createdAt === 'number') {
+          // if it's clearly seconds (less than 1e12) convert to ms
+          tsMs = createdAt < 1e12 ? createdAt * 1000 : createdAt
+        }
+        if (tsMs <= 0) return false
+        const delta = nowMs - tsMs
+        // Debug: show parsed timestamp and delta
+        try { console.debug('[notify] parsed createdAt:', { raw: createdAt, tsMs, delta }) } catch (e) {}
+        return delta <= 20000 // within 20 seconds
+      }
 
       for (const t of liveTokens) {
         const mint = t.token_info?.mint
         if (!mint) continue
-        const isMigrated = !!t.pool_info?.complete
-        if (!prevSet.has(mint) && isMigrated) {
-          newlyAdded.push(t)
+
+        const created = t.timestamps?.created_at ?? null
+        if (!prevSet.has(mint) && isRecent(created)) {
+          newlyLive.push(t)
         }
       }
 
-      if (newlyAdded.length > 0) {
-        // Play sound if enabled and context is ready
-        if (soundEnabled && isReady) {
-          playSound(880, 0.2, 0.1) // frequency, duration, volume
+      if (newlyLive.length > 0) {
+  if (soundEnabled) {
+          try {
+            // attempt to play sound; playSound internally handles readiness and fallback
+            playSound(880, 0.18, 0.09)
+          } catch (err) {
+            // ignore playback errors
+          }
         }
-        
-        // Show toast notifications
-        newlyAdded.slice(0, 3).forEach(t => {
+
+  console.debug('[notify] newlyLive count', newlyLive.length, 'examples', newlyLive.slice(0,5).map(x=>({mint: x.token_info?.mint, symbol: x.token_info?.symbol})))
+
+  newlyLive.slice(0, 3).forEach(t => {
           toast.success(
             <div className="flex flex-col gap-1">
-              <span>🔔 New migrated token: {t.token_info.symbol}</span>
+              <span>🔔 New live token: {t.token_info.symbol}</span>
               <span className="text-sm text-gray-600">{t.token_info.name}</span>
             </div>
           )
         })
       }
 
-      // Update the previous set
+      // Update the previous set of mints
       prevTokenMintsRef.current = new Set(liveTokens.map(t => t.token_info?.mint).filter(Boolean) as string[])
     } catch (e) {
       // swallow errors in notification logic

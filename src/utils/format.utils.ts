@@ -11,7 +11,7 @@ export const parseMarketCap = (mcapStr: string | number | null | undefined): num
   // Convert to string if it's not already
   const strValue = String(mcapStr)
   
-  // Handle empty strings or 'N/A'
+  // Handle empty strings N
   if (!strValue || strValue === 'N/A' || strValue === 'null' || strValue === 'undefined') return 0
   
   // Remove dollar signs, commas, and other formatting characters
@@ -32,17 +32,17 @@ export const parseMarketCap = (mcapStr: string | number | null | undefined): num
  * Format market cap values for display
  */
 export const formatMarketCap = (value: number): string => {
-  if (value >= 1000000000) return `$${(value / 1000000000).toFixed(1)}B`
-  if (value >= 1000000) return `$${(value / 1000000).toFixed(1)}M`
-  if (value >= 1000) return `$${(value / 1000).toFixed(1)}K`
-  return `$${value.toFixed(0)}`
+  if (value >= 1000000000) return `$${(value / 1000000000).toFixed(2)}B`
+  if (value >= 1000000) return `$${(value / 1000000).toFixed(2)}M`
+  if (value >= 1000) return `$${(value / 1000).toFixed(2)}K`
+  return `$${value.toFixed(2)}`
 }
 
 /**
  * Format volume values
  */
 export const formatVolume = (value: number): string => {
-  if (value >= 1000000) return `$${(value / 1000000).toFixed(1)}M`
-  if (value >= 1000) return `$${(value / 1000).toFixed(1)}K`
-  return `$${value.toFixed(0)}`
+  if (value >= 1000000) return `$${(value / 1000000).toFixed(2)}M`
+  if (value >= 1000) return `$${(value / 1000).toFixed(2)}K`
+  return `$${value.toFixed(2)}`
 }

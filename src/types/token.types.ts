@@ -1,3 +1,5 @@
+import { $ZodNumberFormatDef } from "zod/v4/core"
+
 export interface LiveToken {
   token_info: {
     mint: string
@@ -104,6 +106,10 @@ export interface LiveToken {
     price_change_6h?: number
     price_change_24h?: number
     viewers?: number
+  }
+  timestamps?: {
+    created_at?: number | null
+    updated_at?: number | null
   }
 }
 

@@ -3,7 +3,6 @@ import { LiveToken } from '@/types/token.types'
 import { applyFilters, FilterPreferences } from '@/utils/filter.utils'
 
 export const useTokenFiltering = () => {
-  // Always enforce migrated-only filter by default
   const [persistentFilters, setPersistentFilters] = useState<FilterPreferences | null>(null)
 
   useEffect(() => {
@@ -11,10 +10,9 @@ export const useTokenFiltering = () => {
       const saved = localStorage.getItem('tokenTableFilters')
       if (saved) {
         const parsed = JSON.parse(saved) as FilterPreferences
-        // ensure excludeMigrated is always true
-        setPersistentFilters({ ...parsed, excludeMigrated: true})
+        setPersistentFilters(parsed)
       } else {
-        setPersistentFilters({ excludeMigrated: true})
+        setPersistentFilters(null)
       }
     } catch (e) {
       console.warn('Failed to load filters', e)
@@ -23,9 +21,8 @@ export const useTokenFiltering = () => {
   }, [])
 
   const saveFilters = useCallback((filters: FilterPreferences | null) => {
-    // always persist with excludeMigrated enforced
-    const toSave: FilterPreferences = { ...(filters || {}), excludeMigrated: true }
-    setPersistentFilters(toSave)
+  const toSave: FilterPreferences = { ...(filters || {}) }
+  setPersistentFilters(toSave)
     try {
       localStorage.setItem('tokenTableFilters', JSON.stringify(toSave))
     } catch (e) {
@@ -35,8 +32,8 @@ export const useTokenFiltering = () => {
 
   const filterTokens = useCallback((tokens: LiveToken[]) => {
     if (!tokens || tokens.length === 0) return tokens
-    const effective = { ...(persistentFilters || {}), excludeMigrated: true }
-    return applyFilters(tokens, effective)
+  const effective = { ...(persistentFilters || {}) }
+  return applyFilters(tokens, effective)
   }, [persistentFilters])
 
   return {

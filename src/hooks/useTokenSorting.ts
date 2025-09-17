@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react"
 import { LiveToken, SortPreferences } from "@/types/token.types"
 import {
   sortByAge,
+  sortByLiveSince,
   sortByMarketCap,
   sortByATH,
   sortByVolume,
@@ -67,6 +68,9 @@ export const useTokenSorting = () => {
     switch (prefs.sortBy) {
       case 'age':
         sortedTokens = sortByAge(tokens, prefs.sortOrder)
+        break
+      case 'live_since':
+  sortedTokens = sortByLiveSince(tokens, prefs.sortOrder)
         break
       case 'mcap':
         sortedTokens = sortByMarketCap(tokens, prefs.sortOrder)

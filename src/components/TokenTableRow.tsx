@@ -6,6 +6,7 @@ import { TokenImage } from "./TokenImage"
 import { LiveAge } from "./LiveAge"
 import { AnimatedNumber, AnimatedPercentage } from "@/components/animated-number"
 import { AnimatedProgress } from "@/components/animated-progress"
+import { LiveSince } from "./LiveSince"
 
 interface TokenTableRowProps {
   token: LiveToken
@@ -154,6 +155,14 @@ export function TokenTableRow({
             </div>
           )}
         </div>
+      </td>
+      
+      {/* LIVE SINCE */}
+      <td className="w-[90px] p-2 text-center">
+        <LiveSince
+          createdFormatted={token.timestamps?.created_at}
+          className="text-xs"
+        />
       </td>
       
       {/* Volume */}

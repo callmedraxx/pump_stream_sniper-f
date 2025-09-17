@@ -156,6 +156,36 @@ export const sortByCreator = (tokens: LiveToken[], order: 'asc' | 'desc'): LiveT
 }
 
 /**
+ * Sort tokens by live since (timestamps.created_at or activity_info.created_timestamp)
+ */
+export const sortByLiveSince = (tokens: LiveToken[], order: 'asc' | 'desc'): LiveToken[] => {
+  const normalize = (t: LiveToken) => {
+    // Prefer timestamps.created_at (could be ISO string or numeric seconds/ms)
+    const created = t.timestamps?.created_at ?? t.activity_info?.created_timestamp ?? null
+    if (!created) return 0
+
+    if (typeof created === 'string') {
+      const parsed = Date.parse(created)
+      return isNaN(parsed) ? 0 : parsed
+    }
+
+    if (typeof created === 'number') {
+      // convert seconds to ms if needed
+      return created < 1e12 ? created * 1000 : created
+    }
+
+    return 0
+  }
+
+  return [...tokens].sort((a, b) => {
+    const aTime = normalize(a)
+    const bTime = normalize(b)
+    // For live_since: asc = oldest first, desc = newest first
+    return order === 'asc' ? aTime - bTime : bTime - aTime
+  })
+}
+
+/**
  * Sort tokens by trending criteria (complex multi-criteria sorting)
  */
 export const sortByTrending = (tokens: LiveToken[], timePeriod: string): LiveToken[] => {

@@ -50,7 +50,9 @@ export function AppSidebar({ filters, onSaveFilters, quickSellPercent, onQuickSe
   const [minTxns24h, setMinTxns24h] = React.useState<number | undefined>((filters as any)?.minTxns24h)
   const [creatorContains, setCreatorContains] = React.useState<string | undefined>((filters as any)?.creatorContains)
   // Always show only migrated tokens by default and enforce it in the sidebar
-  const [excludeMigrated, setExcludeMigrated] = React.useState<boolean>((filters as any)?.excludeMigrated ?? true)
+  const [excludeMigrated, setExcludeMigrated] = React.useState<boolean>((filters as any)?.excludeMigrated ?? false)
+  // new: show only migrated tokens toggle
+  const [onlyMigrated, setOnlyMigrated] = React.useState<boolean>((filters as any)?.onlyMigrated ?? false)
 
   // Load persisted trading settings
   React.useEffect(() => {
@@ -78,7 +80,8 @@ export function AppSidebar({ filters, onSaveFilters, quickSellPercent, onQuickSe
     setMinTxns24h(undefined)
     setCreatorContains(undefined)
   // keep migrated-only filter applied
-  setExcludeMigrated(true)
+  setExcludeMigrated(false)
+  setOnlyMigrated(false)
     onSaveFilters?.(null)
   }
 
@@ -91,7 +94,8 @@ export function AppSidebar({ filters, onSaveFilters, quickSellPercent, onQuickSe
       minVolume24h,
       minTxns24h,
       creatorContains,
-      excludeMigrated
+  excludeMigrated,
+  onlyMigrated
     })
   }
 
@@ -114,6 +118,19 @@ export function AppSidebar({ filters, onSaveFilters, quickSellPercent, onQuickSe
   React.useEffect(() => {
     setMounted(true)
   }, [])
+
+  // Sync UI state when parent 'filters' prop changes
+  React.useEffect(() => {
+    setMinViewers(filters?.minViewers)
+    setMinTraders(filters?.minTraders)
+    setMinUsdMarketCap(filters?.minUsdMarketCap)
+    setMinAgeDays((filters as any)?.minAgeDays)
+    setMinVolume24h((filters as any)?.minVolume24h)
+    setMinTxns24h((filters as any)?.minTxns24h)
+    setCreatorContains((filters as any)?.creatorContains)
+    setExcludeMigrated((filters as any)?.excludeMigrated ?? false)
+    setOnlyMigrated((filters as any)?.onlyMigrated ?? false)
+  }, [filters])
 
   // Show a Sonner toast on wallet connect (replaces Alert component)
   React.useEffect(() => {
@@ -366,9 +383,20 @@ export function AppSidebar({ filters, onSaveFilters, quickSellPercent, onQuickSe
                 />
               </div>
 
-              {/* Migration filter is always applied */}
-              <div className="py-1">
-                <p className="text-xs text-gray-400">Showing only migrated tokens</p>
+              {/* Migration filters: only migrated */}
+              <div className="py-1 grid grid-cols-1 gap-2">
+
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-xs text-gray-400">Show only migrated tokens</p>
+                  </div>
+                  <Switch
+                    id="onlyMigrated"
+                    checked={onlyMigrated}
+                    onCheckedChange={(v) => setOnlyMigrated(Boolean(v))}
+                    className="scale-75"
+                  />
+                </div>
               </div>
 
               {/* Action buttons */}

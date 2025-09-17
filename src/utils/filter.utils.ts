@@ -9,6 +9,8 @@ export interface FilterPreferences {
   minTxns24h?: number
   creatorContains?: string
   excludeMigrated?: boolean
+  // if true, only show migrated tokens
+  onlyMigrated?: boolean
 }
 
 function parseUsdMarketCap(value: any): number {
@@ -77,14 +79,21 @@ export function applyFilters(tokens: LiveToken[], filters: FilterPreferences | n
       if (!creator.includes(filters.creatorContains.toString().toLowerCase())) return false
     }
 
-    if (filters.excludeMigrated) {
-      // migrated: 0 volume + 0 txns + 0 traders and ath < 100k
-      const vol = (t.trading_info?.volume_24h ?? t.trading_info?.volume_1h ?? 0) as number
-      const txns = (t.trading_info?.txns_24h ?? t.trading_info?.txns_1h ?? 0) as number
-      const traders = (t.trading_info?.traders_24h ?? t.trading_info?.traders_1h ?? 0) as number
-      const athStr = t.market_data?.ath ?? t.trading_info?.price_change_24h ?? null
-      const ath = parseUsdMarketCap(athStr)
-      const isMigrated = vol === 0 && txns === 0 && traders === 0 && ath < 100000
+    // Determine migratedness
+    const vol = (t.trading_info?.volume_24h ?? t.trading_info?.volume_1h ?? 0) as number
+    const txns = (t.trading_info?.txns_24h ?? t.trading_info?.txns_1h ?? 0) as number
+    const traders = (t.trading_info?.traders_24h ?? t.trading_info?.traders_1h ?? 0) as number
+    const complete = (t.pool_info?.complete) as boolean | undefined
+    const athStr = t.market_data?.ath ?? t.trading_info?.price_change_24h ?? null
+  const ath = parseUsdMarketCap(athStr)
+  // migrated tokens: pool marked complete === true and ATH greater than 100,000
+  const isMigrated = (complete === true) && ath > 100000
+
+    if (filters.onlyMigrated) {
+      // only show migrated tokens
+      if (!isMigrated) return false
+    } else if (filters.excludeMigrated) {
+      // exclude migrated tokens from results
       if (isMigrated) return false
     }
 

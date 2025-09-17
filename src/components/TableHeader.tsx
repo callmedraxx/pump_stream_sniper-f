@@ -51,6 +51,14 @@ export function TableHeader({ persistentSort, onSortToggle }: TableHeaderProps) 
           </div>
         </th>
         <th 
+          className="w-[90px] px-2 py-3 text-xs font-medium cursor-pointer hover:bg-muted/50 text-center border-r transition-colors" 
+          onClick={() => onSortToggle('live_since')}
+        >
+          <div className="flex items-center justify-center gap-1">
+            LIVE SINCE {renderSortIcon('live_since')}
+          </div>
+        </th>
+        <th 
           className="w-[80px] px-2 py-3 text-xs font-medium cursor-pointer hover:bg-muted/50 text-center border-r transition-colors" 
           onClick={() => onSortToggle('volume')}
         >

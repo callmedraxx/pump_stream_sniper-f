@@ -13,6 +13,7 @@ interface LiveToken {
   pool_info: any
   activity_info: any
   raw_data: any
+  timestamps: any
   _isUpdated?: boolean
   _updatedAt?: number
   _previousValues?: Record<string, any>
@@ -117,8 +118,14 @@ function transformBackendToken(backendToken: any): LiveToken {
       viewers: safeParseFormattedNumber(backendToken.viewers || backendToken.activity_info?.viewers || 0)
     },
     raw_data: backendToken
+    ,
+    timestamps: {
+      created_at: backendToken.timestamps?.created_at ?? null,
+      updated_at: backendToken.timestamps?.updated_at ?? null,
+    }
   }
 }
+
 
 type ConnectionState = 'connecting' | 'connected' | 'disconnected' | 'error'
 

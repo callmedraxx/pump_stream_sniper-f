@@ -57,6 +57,8 @@ const nextConfig: NextConfig = {
   
   // Your existing images configuration with optimization enhancements
   images: {
+  // Allowlist domains for next/image (keeps backwards compatibility with domain-based checks)
+  domains: ['pbs.twimg.com', 'ipfs.nftstorage.link', 'mypinata.cloud'],
     formats: ['image/webp', 'image/avif'], // Modern formats for better performance
     remotePatterns: [
       {
@@ -64,6 +66,13 @@ const nextConfig: NextConfig = {
         hostname: 'ipfs.io',
         port: '',
         pathname: '/ipfs/**',
+      },
+      // Allow nftstorage IPFS gateway subdomains (e.g. <cid>.ipfs.nftstorage.link)
+      {
+        protocol: 'https',
+        hostname: '*.ipfs.nftstorage.link',
+        port: '',
+        pathname: '/**',
       },
       {
         protocol: 'https',
@@ -137,6 +146,20 @@ const nextConfig: NextConfig = {
         hostname: '79.252.215.111',
         port: '4141',
         pathname: '/static/images/**',
+      },
+      // Allow Twitter image host used by some token images
+      {
+        protocol: 'https',
+        hostname: 'pbs.twimg.com',
+        port: '',
+        pathname: '/**',
+      },
+      // Allow Pinata-hosted subdomains (e.g. letsbonk.mypinata.cloud)
+      {
+        protocol: 'https',
+        hostname: '*.mypinata.cloud',
+        port: '',
+        pathname: '/ipfs/**',
       },
     ],
   },
