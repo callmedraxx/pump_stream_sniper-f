@@ -162,50 +162,34 @@ export default function Page() {
       const prevSet = prevTokenMintsRef.current
       const newlyLive: LiveToken[] = []
 
-  const nowMs = Date.now()
-  // Debug: snapshot of previous mints
-  try { console.debug('[notify] prevMints:', Array.from(prevSet).slice(0,20)) } catch(e){}
-      const isRecent = (createdAt: any) => {
-        if (!createdAt) return false
-        // backend may send ISO string or numeric seconds/ms
-        let tsMs = 0
-        if (typeof createdAt === 'string') {
-          const parsed = Date.parse(createdAt)
-          if (!isNaN(parsed)) tsMs = parsed
-        } else if (typeof createdAt === 'number') {
-          // if it's clearly seconds (less than 1e12) convert to ms
-          tsMs = createdAt < 1e12 ? createdAt * 1000 : createdAt
-        }
-        if (tsMs <= 0) return false
-        const delta = nowMs - tsMs
-        // Debug: show parsed timestamp and delta
-        try { console.debug('[notify] parsed createdAt:', { raw: createdAt, tsMs, delta }) } catch (e) {}
-        return delta <= 20000 // within 20 seconds
-      }
+      // Compute the filtered tokens and sort them by live_since (newest first)
+      const filtered = filterTokens(liveTokens)
+      const sortedByLiveSince = sortTokens(filtered, { sortBy: 'live_since', sortOrder: 'desc', dataTimePeriod: persistentSort.dataTimePeriod })
 
-      for (const t of liveTokens) {
+      // Consider top N tokens as the "top of the list" for notification matching
+      const TOP_N = 6
+      const topCandidates = sortedByLiveSince.slice(0, TOP_N)
+
+      try { console.debug('[notify] topCandidates', topCandidates.map(t => ({ mint: t.token_info?.mint, symbol: t.token_info?.symbol }))) } catch (e) {}
+
+      for (const t of topCandidates) {
         const mint = t.token_info?.mint
         if (!mint) continue
-
-        const created = t.timestamps?.created_at ?? null
-        if (!prevSet.has(mint) && isRecent(created)) {
+        if (!prevSet.has(mint)) {
           newlyLive.push(t)
         }
       }
 
       if (newlyLive.length > 0) {
-  if (soundEnabled) {
+        if (soundEnabled) {
           try {
-            // attempt to play sound; playSound internally handles readiness and fallback
             playSound(880, 0.18, 0.09)
-          } catch (err) {
-            // ignore playback errors
-          }
+          } catch (err) {}
         }
 
-  console.debug('[notify] newlyLive count', newlyLive.length, 'examples', newlyLive.slice(0,5).map(x=>({mint: x.token_info?.mint, symbol: x.token_info?.symbol})))
+        try { console.debug('[notify] newlyLive count', newlyLive.length, 'examples', newlyLive.map(x=>({mint: x.token_info?.mint, symbol: x.token_info?.symbol}))) } catch (e) {}
 
-  newlyLive.slice(0, 3).forEach(t => {
+        newlyLive.slice(0, 3).forEach(t => {
           toast.success(
             <div className="flex flex-col gap-1">
               <span>🔔 New live token: {t.token_info.symbol}</span>
