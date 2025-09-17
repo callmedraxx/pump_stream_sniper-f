@@ -1,7 +1,6 @@
 "use client"
 export const runtime = 'edge'
 
-
 import { useEffect, useState, useMemo, useRef, useCallback } from "react"
 import { useWallet, useConnection } from '@solana/wallet-adapter-react'
 import { PublicKey } from '@solana/web3.js'
@@ -15,6 +14,8 @@ import {
   SidebarProvider,
 } from "@/components/ui/sidebar"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Button } from "@/components/ui/button"
+import { Table, Grid3X3 } from "lucide-react"
 import { useWebsocket } from "@/hooks/use-websocket"
 import { useTokenSorting } from "@/hooks/useTokenSorting"
 import { useTokenFiltering } from "@/hooks/useTokenFiltering"
@@ -24,13 +25,13 @@ import { TableHeader } from "../../components/TableHeader"
 import { TokenTableRow } from "../../components/TokenTableRow"
 import { PaginationControls } from "../../components/PaginationControls"
 import { SolBalanceSidebar } from "../../components/SolBalanceSidebar"
+import { BoxedViewLayout } from "../../components/BoxedViewLayout"
 
-// Audio Context Hook
+// Audio Context Hook (same as before)
 const useAudioContext = () => {
   const audioCtxRef = useRef<AudioContext | null>(null)
   const isUnlockedRef = useRef<boolean>(false)
   
-  // Initialize audio context on first user interaction
   useEffect(() => {
     const initAudio = async () => {
       try {
@@ -39,7 +40,6 @@ const useAudioContext = () => {
         
         audioCtxRef.current = new AudioCtxClass()
 
-        // Try to resume immediately if possible (guard for null)
         const ctx = audioCtxRef.current
         if (ctx && ctx.state === 'suspended') {
           await ctx.resume()
@@ -51,14 +51,12 @@ const useAudioContext = () => {
       }
     }
 
-    // Set up listeners for user gestures
     const handleUserGesture = () => {
       if (!isUnlockedRef.current) {
         initAudio()
       }
     }
 
-    // Listen for any user interaction
     document.addEventListener('click', handleUserGesture, { once: true })
     document.addEventListener('keydown', handleUserGesture, { once: true })
     document.addEventListener('touchstart', handleUserGesture, { once: true })
@@ -73,8 +71,6 @@ const useAudioContext = () => {
   const playSound = useCallback((frequency = 880, duration = 0.14, volume = 0.08) => {
     try {
       if (!audioCtxRef.current || !isUnlockedRef.current) {
-        console.log('Audio context not ready, trying fallback...')
-        // Fallback to simple audio element
         const audio = new Audio('data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2/LDciUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvmocBzuR1/LNeSsFJH')
         audio.volume = volume
         audio.play().catch(() => {})
@@ -85,7 +81,6 @@ const useAudioContext = () => {
       
       if (ctx.state === 'suspended') {
         ctx.resume().then(() => {
-          // Retry playing after resume
           playActualSound(ctx, frequency, duration, volume)
         }).catch(() => {})
         return
@@ -119,7 +114,7 @@ const useAudioContext = () => {
 }
 
 export default function Page() {
-  // Use the SSE hook for real-time token data
+  // All existing hooks and state (same as before)
   const {
     tokens: liveTokens,
     connect: reconnect,
@@ -127,50 +122,76 @@ export default function Page() {
     isConnected
   } = useWebsocket({
     onTokenUpdate: (tokens) => {
-      //console.log('Tokens updated from WebSocket:', tokens.length)
+      // console.log('Tokens updated from WebSocket:', tokens.length)
     }
   })
 
-  // Use the sorting hook
   const { persistentSort, saveSortPreferences, sortTokens } = useTokenSorting()
-  // Use the filtering hook
   const { persistentFilters, saveFilters, filterTokens } = useTokenFiltering()
-
-  // Use the SOL balance hook
   const { sol: walletSolBalance, error: balanceError } = useSolBalance()
-
-  // Use the audio hook
   const { playSound, isReady } = useAudioContext()
 
   const [isLoading, setIsLoading] = useState<boolean>(true)
-  const [uiSelection, setUiSelection] = useState<string>('24h') // UI selection: time period or 'trending'
-  const [dataTimePeriod, setDataTimePeriod] = useState<string>('24h') // Actual time period for data display
+  const [uiSelection, setUiSelection] = useState<string>('24h')
+  const [dataTimePeriod, setDataTimePeriod] = useState<string>('24h')
   const [tokens, setTokens] = useState<LiveToken[]>([])
-
-  // Search state for filtering tokens by symbol, name, or mint
   const [searchQuery, setSearchQuery] = useState<string>('')
-
-  // Keep a ref of previous token mint set to detect newly added tokens
-  const prevTokenMintsRef = useRef<Set<string>>(new Set())
-
-  // Simple sound enabled state
   const [soundEnabled, setSoundEnabled] = useState(true)
+  const [quickSellPercent, setQuickSellPercent] = useState<number | undefined>(undefined)
+  const [isTrading, setIsTrading] = useState<boolean>(false)
 
-  // Detect newly live tokens (based on timestamps.created_at within last 20s)
+  // NEW: View mode state
+  const [viewMode, setViewMode] = useState<'table' | 'boxed'>('table')
+
+  const prevTokenMintsRef = useRef<Set<string>>(new Set())
+  const wallet = useWallet()
+  const { connection } = useConnection()
+
+  // Pagination state (only used in table view)
+  const [currentPage, setCurrentPage] = useState<number>(1)
+  const [itemsPerPage] = useState<number>(48)
+
+  // Load view mode preference from localStorage
+  useEffect(() => {
+    try {
+      const savedViewMode = localStorage.getItem('viewMode')
+      if (savedViewMode === 'boxed' || savedViewMode === 'table') {
+        setViewMode(savedViewMode)
+      }
+    } catch (e) {
+      console.warn('Failed to load view mode preference:', e)
+    }
+  }, [])
+
+  // Save view mode preference to localStorage
+  const handleViewModeChange = (mode: 'table' | 'boxed') => {
+    setViewMode(mode)
+    try {
+      localStorage.setItem('viewMode', mode)
+    } catch (e) {
+      console.warn('Failed to save view mode preference:', e)
+    }
+  }
+
+  // Load persisted quick sell percent
+  useEffect(() => {
+    try {
+      const v = localStorage.getItem('quickSellPercent')
+      if (v) setQuickSellPercent(Number(v))
+    } catch (e) {}
+  }, [])
+
+  // Notification logic for newly live tokens (same as before)
   useEffect(() => {
     try {
       const prevSet = prevTokenMintsRef.current
       const newlyLive: LiveToken[] = []
 
-      // Compute the filtered tokens and sort them by live_since (newest first)
       const filtered = filterTokens(liveTokens)
       const sortedByLiveSince = sortTokens(filtered, { sortBy: 'live_since', sortOrder: 'desc', dataTimePeriod: persistentSort.dataTimePeriod })
 
-      // Consider top N tokens as the "top of the list" for notification matching
       const TOP_N = 6
       const topCandidates = sortedByLiveSince.slice(0, TOP_N)
-
-      try { console.debug('[notify] topCandidates', topCandidates.map(t => ({ mint: t.token_info?.mint, symbol: t.token_info?.symbol }))) } catch (e) {}
 
       for (const t of topCandidates) {
         const mint = t.token_info?.mint
@@ -187,8 +208,6 @@ export default function Page() {
           } catch (err) {}
         }
 
-        try { console.debug('[notify] newlyLive count', newlyLive.length, 'examples', newlyLive.map(x=>({mint: x.token_info?.mint, symbol: x.token_info?.symbol}))) } catch (e) {}
-
         newlyLive.slice(0, 3).forEach(t => {
           toast.success(
             <div className="flex flex-col gap-1">
@@ -199,88 +218,69 @@ export default function Page() {
         })
       }
 
-      // Update the previous set of mints
       prevTokenMintsRef.current = new Set(liveTokens.map(t => t.token_info?.mint).filter(Boolean) as string[])
     } catch (e) {
       // swallow errors in notification logic
     }
   }, [liveTokens, playSound, soundEnabled, isReady])
 
-  // Pagination state
-  const [currentPage, setCurrentPage] = useState<number>(1)
-  const [itemsPerPage] = useState<number>(48)
-
-  // Reset to first page when sorting changes
+  // Reset to first page when sorting changes (table view only)
   useEffect(() => {
-    setCurrentPage(1)
-  }, [persistentSort.sortBy, persistentSort.sortOrder, persistentSort.dataTimePeriod])
+    if (viewMode === 'table') {
+      setCurrentPage(1)
+    }
+  }, [persistentSort.sortBy, persistentSort.sortOrder, persistentSort.dataTimePeriod, viewMode])
 
   // Initial data loading
   useEffect(() => {
     const timer = setTimeout(() => {
       setIsLoading(false)
     }, 1000)
-
     return () => clearTimeout(timer)
   }, [])
 
-  // Apply filters first, then sorting for display
+  // Apply filters and sorting for table view
   const sortedTokens = useMemo(() => {
     if (liveTokens.length === 0) return liveTokens
-    // Apply existing filters
     let filtered = filterTokens(liveTokens)
 
-    // If there's a search query, further filter by symbol, name, or mint (case-insensitive)
-    const q = searchQuery.trim().toLowerCase()
-    if (q.length > 0) {
-      filtered = filtered.filter(t => {
-        const symbol = (t.token_info?.symbol || '').toLowerCase()
-        const name = (t.token_info?.name || '').toLowerCase()
-        const mint = (t.token_info?.mint || '').toLowerCase()
-        return symbol.includes(q) || name.includes(q) || mint.includes(q)
-      })
+    // Search filter (only for table view)
+    if (viewMode === 'table') {
+      const q = searchQuery.trim().toLowerCase()
+      if (q.length > 0) {
+        filtered = filtered.filter(t => {
+          const symbol = (t.token_info?.symbol || '').toLowerCase()
+          const name = (t.token_info?.name || '').toLowerCase()
+          const mint = (t.token_info?.mint || '').toLowerCase()
+          return symbol.includes(q) || name.includes(q) || mint.includes(q)
+        })
+      }
     }
 
     return sortTokens(filtered)
-  }, [liveTokens, persistentSort.sortBy, persistentSort.sortOrder, persistentSort.dataTimePeriod, sortTokens, filterTokens])
+  }, [liveTokens, persistentSort.sortBy, persistentSort.sortOrder, persistentSort.dataTimePeriod, sortTokens, filterTokens, searchQuery, viewMode])
 
-  // Calculate pagination values
+  // Calculate pagination values (table view only)
   const totalPages = Math.ceil(sortedTokens.length / itemsPerPage)
   const startIndex = (currentPage - 1) * itemsPerPage
   const endIndex = startIndex + itemsPerPage
   const currentTokens = sortedTokens.slice(startIndex, endIndex)
 
-  // Reset to first page when tokens change significantly
+  // Reset to first page when tokens change significantly (table view only)
   useEffect(() => {
-    if (currentPage > totalPages && totalPages > 0) {
+    if (viewMode === 'table' && currentPage > totalPages && totalPages > 0) {
       setCurrentPage(1)
     }
-  }, [currentPage, totalPages])
+  }, [currentPage, totalPages, viewMode])
 
-  // Get creator count for display purposes
   const getCreatorCount = (creator: string) => {
     return sortedTokens.filter(token => 
       (token.creator_info.creator || 'Unknown') === creator
     ).length
   }
 
-  // Trading handlers with real VibeStation integration
-  const [quickSellPercent, setQuickSellPercent] = useState<number | undefined>(undefined)
-  const [isTrading, setIsTrading] = useState<boolean>(false)
-  const wallet = useWallet()
-  const { connection } = useConnection()
-
-  // Read persisted quick sell percent only on the client after mount to avoid
-  // server/client markup mismatch (hydration errors).
-  useEffect(() => {
-    try {
-      const v = localStorage.getItem('quickSellPercent')
-      if (v) setQuickSellPercent(Number(v))
-    } catch (e) {}
-  }, [])
-
+  // Trading handlers (same as before)
   const handleBuy = async (token: LiveToken) => {
-    // Ensure wallet is connected
     if (!wallet || !wallet.connected || !wallet.publicKey) {
       toast.error('Please connect your Solana wallet first')
       return
@@ -291,7 +291,6 @@ export default function Page() {
       return
     }
 
-    // Read buy amount from localStorage (set by sidebar)
     let amountSOL = 0
     try {
       const s = localStorage.getItem('buyAmountSOL')
@@ -309,7 +308,6 @@ export default function Page() {
     setIsTrading(true)
 
     try {
-      // Check wallet SOL balance before attempting transaction
       if (balanceError) {
         toast.error('Unable to fetch wallet balance. Please try again.')
         setIsTrading(false)
@@ -322,7 +320,6 @@ export default function Page() {
         return
       }
 
-      // Extract token metadata for better migration detection
       const tokenData = {
         raydiumPool: token.pool_info.raydium_pool,
         pumpSwapPool: (token.raw_data as any)?.pump_swap_pool || null,
@@ -335,7 +332,7 @@ export default function Page() {
         token.token_info.mint, 
         amountSOL,
         { 
-          simulate: true, // Enable simulation for safety
+          simulate: true,
           tokenData
         }
       )
@@ -385,7 +382,6 @@ export default function Page() {
     setIsTrading(true)
 
     try {
-      // Check token balance before attempting transaction
       try {
         const mintPubkey = new PublicKey(token.token_info.mint)
         const associatedTokenAddress = await getAssociatedTokenAddress(
@@ -417,10 +413,8 @@ export default function Page() {
         }
       } catch (balErr) {
         console.warn('Failed to fetch token balance, proceeding with caution', balErr)
-        // Continue anyway, let the transaction handle it
       }
 
-      // Extract token metadata for better migration detection
       const tokenData = {
         raydiumPool: token.pool_info.raydium_pool,
         pumpSwapPool: (token.raw_data as any)?.pump_swap_pool || null,
@@ -433,7 +427,7 @@ export default function Page() {
         token.token_info.mint, 
         sellPercent,
         { 
-          simulate: true, // Enable simulation for safety
+          simulate: true,
           tokenData
         }
       )
@@ -471,34 +465,27 @@ export default function Page() {
     let newSortOrder: 'asc' | 'desc' = 'desc'
     
     if (persistentSort.sortBy === column) {
-      // Toggle order if same column
       newSortOrder = persistentSort.sortOrder === 'asc' ? 'desc' : 'asc'
     } else {
-      // New column, default to desc except for certain columns
       newSortOrder = ['age', 'symbol'].includes(column) ? 'asc' : 'desc'
     }
 
-    // Update sort preferences
     saveSortPreferences(column, newSortOrder, dataTimePeriod)
   }
 
   const handleTimePeriodChange = (value: string) => {
     setUiSelection(value)
     if (value === 'trending') {
-      // Switch to trending sort
       saveSortPreferences('trending', 'desc', dataTimePeriod)
     } else {
-      // Update time period
       const newTimePeriod = value
       setDataTimePeriod(newTimePeriod)
       
-      // If we were in trending mode, switch to age sorting
       let newSortBy = persistentSort.sortBy
       if (persistentSort.sortBy === 'trending') {
         newSortBy = 'age'
       }
       
-      // Update persistent sort with new time period
       saveSortPreferences(newSortBy, persistentSort.sortOrder, newTimePeriod)
     }
   }
@@ -524,21 +511,45 @@ export default function Page() {
         <div className="flex flex-1 flex-col">
           <div className="@container/main flex flex-1 flex-col gap-2">
             <div className="flex flex-col gap-4 py-4 md:gap-6 md:py-6 px-4">
-              {/* Compact Search + Time Period + Connection Status (single row) */}
+              {/* Enhanced Controls Row */}
               <div className="flex items-center gap-3 p-3 bg-muted/30 rounded-xl border">
-                {/* Search Input */}
-                <div className="flex-1 min-w-0">
-                  <input
-                    aria-label="Search tokens"
-                    type="search"
-                    value={searchQuery}
-                    onChange={(e) => { setSearchQuery(e.target.value); setCurrentPage(1); }}
-                    placeholder="Search by symbol, name, or mint"
-                    className="w-full rounded-lg border px-3 py-2 bg-background text-sm focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors"
-                  />
+                {/* View Mode Toggle */}
+                <div className="flex items-center gap-2 flex-shrink-0">
+                  <Button
+                    size="sm"
+                    variant={viewMode === 'table' ? 'default' : 'outline'}
+                    onClick={() => handleViewModeChange('table')}
+                    className="h-9 px-3"
+                  >
+                    <Table className="h-4 w-4 mr-1" />
+                    Table
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant={viewMode === 'boxed' ? 'default' : 'outline'}
+                    onClick={() => handleViewModeChange('boxed')}
+                    className="h-9 px-3"
+                  >
+                    <Grid3X3 className="h-4 w-4 mr-1" />
+                    Boxes
+                  </Button>
                 </div>
 
-                {/* Time Period Tabs - Compact */}
+                {/* Search Input - Only show in table view */}
+                {viewMode === 'table' && (
+                  <div className="flex-1 min-w-0">
+                    <input
+                      aria-label="Search tokens"
+                      type="search"
+                      value={searchQuery}
+                      onChange={(e) => { setSearchQuery(e.target.value); setCurrentPage(1); }}
+                      placeholder="Search by symbol, name, or mint"
+                      className="w-full rounded-lg border px-3 py-2 bg-background text-sm focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors"
+                    />
+                  </div>
+                )}
+
+                {/* Time Period Tabs */}
                 <div className="flex-shrink-0">
                   <Tabs value={uiSelection} onValueChange={handleTimePeriodChange}>
                     <TabsList className="grid grid-cols-5 bg-background/50 rounded-lg p-1 h-9">
@@ -576,7 +587,7 @@ export default function Page() {
                   </Tabs>
                 </div>
 
-                {/* Connection Status - Compact */}
+                {/* Connection Status */}
                 <div className="flex items-center gap-2 flex-shrink-0">
                   {wallet.connected && (
                     <div className="flex items-center gap-1.5 px-2 py-1 bg-green-500/10 rounded-lg border border-green-500/20">
@@ -594,78 +605,86 @@ export default function Page() {
                 </div>
               </div>
 
-              {/* Enhanced Tokens Table with Fixed Token Column */}
-              <div className="border rounded-lg overflow-hidden table-shadow table-border bg-background">
-                <div className="relative overflow-hidden">
-                  {/* Table Container with Synchronized Scrolling */}
-                  <div className="max-h-[75vh] overflow-auto scrollbar-thin">
-                    <table className="w-full">
-                      {/* Table Header */}
-                      <TableHeader 
-                        persistentSort={persistentSort} 
-                        onSortToggle={handleSortToggle} 
-                      />
-                      
-                      {/* Table Body */}
-                      <tbody>
-                        {isLoading ? (
-                          Array.from({ length: itemsPerPage }, (_, i) => (
-                            <tr key={i} className="border-b animate-pulse h-16">
-                              {/* Fixed Token Cell */}
-                              <td className="sticky left-0 z-10 w-[240px] p-3 bg-background border-r shadow-sm">
-                                <div className="flex items-center gap-3">
-                                  <div className="h-8 w-8 rounded-full bg-muted"></div>
-                                  <div className="flex-1">
-                                    <div className="h-4 bg-muted rounded mb-1"></div>
-                                    <div className="h-3 bg-muted/70 rounded w-16"></div>
+              {/* Content Area - Conditional Rendering */}
+              {viewMode === 'table' ? (
+                /* Table View */
+                <div className="border rounded-lg overflow-hidden table-shadow table-border bg-background">
+                  <div className="relative overflow-hidden">
+                    <div className="max-h-[75vh] overflow-auto scrollbar-thin">
+                      <table className="w-full">
+                        <TableHeader 
+                          persistentSort={persistentSort} 
+                          onSortToggle={handleSortToggle} 
+                        />
+                        
+                        <tbody>
+                          {isLoading ? (
+                            Array.from({ length: itemsPerPage }, (_, i) => (
+                              <tr key={i} className="border-b animate-pulse h-16">
+                                <td className="sticky left-0 z-10 w-[240px] p-3 bg-background border-r shadow-sm">
+                                  <div className="flex items-center gap-3">
+                                    <div className="h-8 w-8 rounded-full bg-muted"></div>
+                                    <div className="flex-1">
+                                      <div className="h-4 bg-muted rounded mb-1"></div>
+                                      <div className="h-3 bg-muted/70 rounded w-16"></div>
+                                    </div>
                                   </div>
-                                </div>
-                              </td>
-                              
-                              {/* Scrollable Skeleton Cells */}
-                              {Array.from({ length: 11 }, (_, cellIndex) => (
-                                <td key={cellIndex} className="p-2 text-center">
-                                  <div className="h-3 w-8 bg-muted rounded mx-auto"></div>
                                 </td>
-                              ))}
-                            </tr>
-                          ))
-                        ) : (
-                          currentTokens.map((token, index) => (
-                            <TokenTableRow
-                              key={token.token_info.mint}
-                              token={token}
-                              index={index}
-                              startIndex={startIndex}
-                              dataTimePeriod={dataTimePeriod}
-                              persistentSort={persistentSort}
-                              getCreatorCount={getCreatorCount}
-                              onBuy={handleBuy}
-                              onSell={handleSell}
-                              selectedQuickSellPercent={quickSellPercent}
-                            />
-                          ))
-                        )}
-                      </tbody>
-                    </table>
+                                
+                                {Array.from({ length: 11 }, (_, cellIndex) => (
+                                  <td key={cellIndex} className="p-2 text-center">
+                                    <div className="h-3 w-8 bg-muted rounded mx-auto"></div>
+                                  </td>
+                                ))}
+                              </tr>
+                            ))
+                          ) : (
+                            currentTokens.map((token, index) => (
+                              <TokenTableRow
+                                key={token.token_info.mint}
+                                token={token}
+                                index={index}
+                                startIndex={startIndex}
+                                dataTimePeriod={dataTimePeriod}
+                                persistentSort={persistentSort}
+                                getCreatorCount={getCreatorCount}
+                                onBuy={handleBuy}
+                                onSell={handleSell}
+                                selectedQuickSellPercent={quickSellPercent}
+                              />
+                            ))
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
                   </div>
-                </div>
 
-                {/* Pagination Controls */}
-                <PaginationControls
-                  currentPage={currentPage}
-                  totalPages={totalPages}
-                  startIndex={startIndex}
-                  endIndex={endIndex}
-                  totalTokens={sortedTokens.length}
-                  onPageChange={setCurrentPage}
+                  <PaginationControls
+                    currentPage={currentPage}
+                    totalPages={totalPages}
+                    startIndex={startIndex}
+                    endIndex={endIndex}
+                    totalTokens={sortedTokens.length}
+                    onPageChange={setCurrentPage}
+                  />
+                </div>
+              ) : (
+                /* Boxed View */
+                <BoxedViewLayout
+                  liveTokens={liveTokens}
+                  dataTimePeriod={dataTimePeriod}
+                  onBuy={handleBuy}
+                  onSell={handleSell}
+                  selectedQuickSellPercent={quickSellPercent}
+                  sortTokens={sortTokens}
+                  filterTokens={filterTokens}
                 />
-              </div>
+              )}
             </div>
           </div>
         </div>
       </SidebarInset>
-       <SolBalanceSidebar />
+      <SolBalanceSidebar />
     </SidebarProvider>
   )
 }
