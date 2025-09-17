@@ -15,19 +15,19 @@ export function TableHeader({ persistentSort, onSortToggle }: TableHeaderProps) 
   }
 
   return (
-    <thead className="sticky top-0 z-20 bg-background border-b backdrop-blur-sm">
+    <thead className="sticky top-0 z-20 bg-[#0b2545] text-white/90 border-b backdrop-blur-sm">
       <tr>
         {/* Fixed Token Header */}
-        <th className="sticky left-0 z-30 w-[220px] px-4 py-3 text-left text-xs font-semibold bg-background border-r shadow-sm">
+        <th className="sticky left-0 z-30 w-[220px] px-4 py-3 text-left text-xs font-semibold bg-[#0b2545] border-r shadow-sm">
           TOKEN
         </th>
         
         {/* Scrollable Headers */}
-        <th className="w-[80px] px-2 py-3 text-xs font-medium text-center border-r">
+  <th className="w-[80px] px-2 py-3 text-xs font-medium text-center border-r">
           GRAPH
         </th>
         <th 
-          className="w-[70px] px-2 py-3 text-xs font-medium cursor-pointer hover:bg-muted/50 text-center border-r transition-colors" 
+          className="w-[70px] px-2 py-3 text-xs font-medium cursor-pointer hover:bg-[#123157] text-center border-r transition-colors" 
           onClick={() => onSortToggle('age')}
         >
           <div className="flex items-center justify-center gap-1">
@@ -35,7 +35,7 @@ export function TableHeader({ persistentSort, onSortToggle }: TableHeaderProps) 
           </div>
         </th>
         <th 
-          className="w-[90px] px-2 py-3 text-xs font-medium cursor-pointer hover:bg-muted/50 text-center border-r transition-colors" 
+          className="w-[90px] px-2 py-3 text-xs font-medium cursor-pointer hover:bg-[#123157] text-center border-r transition-colors" 
           onClick={() => onSortToggle('mcap')}
         >
           <div className="flex items-center justify-center gap-1">
@@ -43,7 +43,7 @@ export function TableHeader({ persistentSort, onSortToggle }: TableHeaderProps) 
           </div>
         </th>
         <th 
-          className="w-[80px] px-2 py-3 text-xs font-medium cursor-pointer hover:bg-muted/50 text-center border-r transition-colors" 
+          className="w-[80px] px-2 py-3 text-xs font-medium cursor-pointer hover:bg-[#123157] text-center border-r transition-colors" 
           onClick={() => onSortToggle('ath')}
         >
           <div className="flex items-center justify-center gap-1">
@@ -51,7 +51,7 @@ export function TableHeader({ persistentSort, onSortToggle }: TableHeaderProps) 
           </div>
         </th>
         <th 
-          className="w-[90px] px-2 py-3 text-xs font-medium cursor-pointer hover:bg-muted/50 text-center border-r transition-colors" 
+          className="w-[90px] px-2 py-3 text-xs font-medium cursor-pointer hover:bg-[#123157] text-center border-r transition-colors" 
           onClick={() => onSortToggle('live_since')}
         >
           <div className="flex items-center justify-center gap-1">
@@ -59,7 +59,7 @@ export function TableHeader({ persistentSort, onSortToggle }: TableHeaderProps) 
           </div>
         </th>
         <th 
-          className="w-[80px] px-2 py-3 text-xs font-medium cursor-pointer hover:bg-muted/50 text-center border-r transition-colors" 
+          className="w-[80px] px-2 py-3 text-xs font-medium cursor-pointer hover:bg-[#123157] text-center border-r transition-colors" 
           onClick={() => onSortToggle('volume')}
         >
           <div className="flex items-center justify-center gap-1">
@@ -67,7 +67,7 @@ export function TableHeader({ persistentSort, onSortToggle }: TableHeaderProps) 
           </div>
         </th>
         <th 
-          className="w-[70px] px-2 py-3 text-xs font-medium cursor-pointer hover:bg-muted/50 text-center border-r transition-colors" 
+          className="w-[70px] px-2 py-3 text-xs font-medium cursor-pointer hover:bg-[#123157] text-center border-r transition-colors" 
           onClick={() => onSortToggle('txns')}
         >
           <div className="flex items-center justify-center gap-1">
@@ -75,7 +75,7 @@ export function TableHeader({ persistentSort, onSortToggle }: TableHeaderProps) 
           </div>
         </th>
         <th 
-          className="w-[80px] px-2 py-3 text-xs font-medium cursor-pointer hover:bg-muted/50 text-center border-r transition-colors" 
+          className="w-[80px] px-2 py-3 text-xs font-medium cursor-pointer hover:bg-[#123157] text-center border-r transition-colors" 
           onClick={() => onSortToggle('traders')}
         >
           <div className="flex items-center justify-center gap-1">
@@ -83,7 +83,7 @@ export function TableHeader({ persistentSort, onSortToggle }: TableHeaderProps) 
           </div>
         </th>
         <th 
-          className="w-[90px] px-2 py-3 text-xs font-medium cursor-pointer hover:bg-muted/50 text-center border-r transition-colors" 
+          className="w-[90px] px-2 py-3 text-xs font-medium cursor-pointer hover:bg-[#123157] text-center border-r transition-colors" 
           onClick={() => onSortToggle('price_change')}
         >
           <div className="flex items-center justify-center gap-1">
@@ -91,7 +91,7 @@ export function TableHeader({ persistentSort, onSortToggle }: TableHeaderProps) 
           </div>
         </th>
         <th 
-          className="w-[60px] px-2 py-3 text-xs font-medium cursor-pointer hover:bg-muted/50 text-center border-r transition-colors" 
+          className="w-[60px] px-2 py-3 text-xs font-medium cursor-pointer hover:bg-[#123157] text-center border-r transition-colors" 
           onClick={() => onSortToggle('viewers')}
         >
           <div className="flex items-center justify-center gap-1">
@@ -99,14 +99,14 @@ export function TableHeader({ persistentSort, onSortToggle }: TableHeaderProps) 
           </div>
         </th>
         <th 
-          className="w-[100px] px-2 py-3 text-xs font-medium cursor-pointer hover:bg-muted/50 text-center transition-colors" 
+          className="w-[100px] px-2 py-3 text-xs font-medium cursor-pointer hover:bg-[#123157] text-center transition-colors" 
           onClick={() => onSortToggle('creator')}
         >
           <div className="flex items-center justify-center gap-1">
             CREATOR {renderSortIcon('creator')}
           </div>
         </th>
-        <th className="w-[80px] px-2 py-3 text-xs font-medium text-center">
+  <th className="w-[80px] px-2 py-3 text-xs font-medium text-center">
           GMGN
         </th>
       </tr>

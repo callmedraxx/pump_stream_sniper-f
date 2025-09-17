@@ -524,48 +524,74 @@ export default function Page() {
         <div className="flex flex-1 flex-col">
           <div className="@container/main flex flex-1 flex-col gap-2">
             <div className="flex flex-col gap-4 py-4 md:gap-6 md:py-6 px-4">
-              {/* Search input + Connection Status (single row) */}
-              <div className="flex items-center justify-between gap-4 p-3 bg-muted/30 rounded-lg border">
-                <div className="flex items-center gap-4 flex-1">
+              {/* Compact Search + Time Period + Connection Status (single row) */}
+              <div className="flex items-center gap-3 p-3 bg-muted/30 rounded-xl border">
+                {/* Search Input */}
+                <div className="flex-1 min-w-0">
                   <input
                     aria-label="Search tokens"
                     type="search"
                     value={searchQuery}
                     onChange={(e) => { setSearchQuery(e.target.value); setCurrentPage(1); }}
                     placeholder="Search by symbol, name, or mint"
-                    className="w-full max-w-lg rounded-md border px-3 py-2 bg-background text-sm"
+                    className="w-full rounded-lg border px-3 py-2 bg-background text-sm focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors"
                   />
                 </div>
 
-                <div className="flex items-center gap-3">
-                  <div className="flex items-center gap-2">
-                    {wallet.connected && (
-                      <>
-                        <div className="w-2 h-2 rounded-full bg-green-500 ml-4" />
-                        <span className="text-sm text-muted-foreground">Wallet: Connected</span>
-                      </>
-                    )}
-                  </div>
+                {/* Time Period Tabs - Compact */}
+                <div className="flex-shrink-0">
+                  <Tabs value={uiSelection} onValueChange={handleTimePeriodChange}>
+                    <TabsList className="grid grid-cols-5 bg-background/50 rounded-lg p-1 h-9">
+                      <TabsTrigger 
+                        value="5m" 
+                        className="px-2 py-1 text-xs rounded-md data-[state=active]:bg-primary data-[state=active]:text-primary-foreground transition-all"
+                      >
+                        5M
+                      </TabsTrigger>
+                      <TabsTrigger 
+                        value="1h" 
+                        className="px-2 py-1 text-xs rounded-md data-[state=active]:bg-primary data-[state=active]:text-primary-foreground transition-all"
+                      >
+                        1H
+                      </TabsTrigger>
+                      <TabsTrigger 
+                        value="6h" 
+                        className="px-2 py-1 text-xs rounded-md data-[state=active]:bg-primary data-[state=active]:text-primary-foreground transition-all"
+                      >
+                        6H
+                      </TabsTrigger>
+                      <TabsTrigger 
+                        value="24h" 
+                        className="px-2 py-1 text-xs rounded-md data-[state=active]:bg-primary data-[state=active]:text-primary-foreground transition-all"
+                      >
+                        24H
+                      </TabsTrigger>
+                      <TabsTrigger 
+                        value="trending" 
+                        className="px-2 py-1 text-xs rounded-md data-[state=active]:bg-primary data-[state=active]:text-primary-foreground transition-all"
+                      >
+                        TREND
+                      </TabsTrigger>
+                    </TabsList>
+                  </Tabs>
+                </div>
+
+                {/* Connection Status - Compact */}
+                <div className="flex items-center gap-2 flex-shrink-0">
+                  {wallet.connected && (
+                    <div className="flex items-center gap-1.5 px-2 py-1 bg-green-500/10 rounded-lg border border-green-500/20">
+                      <div className="w-1.5 h-1.5 rounded-full bg-green-500" />
+                      <span className="text-xs text-green-700 dark:text-green-400 font-medium">Connected</span>
+                    </div>
+                  )}
 
                   {isTrading && (
-                    <div className="flex items-center gap-2">
-                      <div className="animate-spin rounded-full h-4 w-4 border-2 border-blue-500 border-t-transparent" />
-                      <span className="text-sm text-blue-500">Processing transaction...</span>
+                    <div className="flex items-center gap-1.5 px-2 py-1 bg-blue-500/10 rounded-lg border border-blue-500/20">
+                      <div className="animate-spin rounded-full h-3 w-3 border-2 border-blue-500 border-t-transparent" />
+                      <span className="text-xs text-blue-600 dark:text-blue-400 font-medium">Trading...</span>
                     </div>
                   )}
                 </div>
-              </div>
-              {/* Time Period Selector */}
-              <div className="flex items-center gap-4 p-3 bg-muted/30 rounded-lg border">
-                <Tabs value={uiSelection} onValueChange={handleTimePeriodChange} className="flex-1">
-                  <TabsList className="grid w-full max-w-md grid-cols-5">
-                    <TabsTrigger value="5m">5M</TabsTrigger>
-                    <TabsTrigger value="1h">1H</TabsTrigger>
-                    <TabsTrigger value="6h">6H</TabsTrigger>
-                    <TabsTrigger value="24h">24H</TabsTrigger>
-                    <TabsTrigger value="trending">TRENDING</TabsTrigger>
-                  </TabsList>
-                </Tabs>
               </div>
 
               {/* Enhanced Tokens Table with Fixed Token Column */}
