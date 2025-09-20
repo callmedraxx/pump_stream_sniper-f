@@ -1,5 +1,4 @@
 "use client"
-export const runtime = 'edge'
 
 import { useEffect, useState, useMemo, useRef, useCallback } from "react"
 import { useWallet, useConnection } from '@solana/wallet-adapter-react'

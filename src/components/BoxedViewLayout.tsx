@@ -246,7 +246,7 @@ const TokenSection: React.FC<SectionProps> = ({
 }) => {
   const [searchQuery, setSearchQuery] = useState('')
   const [currentPage, setCurrentPage] = useState(1)
-  const itemsPerPage = 50
+  const itemsPerPage = 12
 
   const filteredTokens = useMemo(() => {
     if (!searchQuery.trim()) return tokens
@@ -293,7 +293,7 @@ const TokenSection: React.FC<SectionProps> = ({
       </div>
 
       {/* Token Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-1 lg:grid-cols-2 xl:grid-cols-2 gap-3 min-h-[600px]">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 min-h-[600px]">
         {currentTokens.map((token, index) => (
           <TokenBox
             key={token.token_info.mint}
@@ -387,10 +387,10 @@ export const BoxedViewLayout: React.FC<BoxedViewLayoutProps> = ({
   }, [baseFilteredTokens, sortTokens, dataTimePeriod])
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+    <div className="space-y-8">
       {/* Latest Live Tokens Section */}
       <TokenSection
-        title="New Live"
+        title="New Tokens"
         tokens={latestTokens}
         dataTimePeriod={dataTimePeriod}
         onBuy={onBuy}
@@ -401,7 +401,7 @@ export const BoxedViewLayout: React.FC<BoxedViewLayoutProps> = ({
 
       {/* Top Market Cap Section */}
       <TokenSection
-        title="Market Cap"
+        title="Top by Market Cap"
         tokens={topMarketCapTokens}
         dataTimePeriod={dataTimePeriod}
         onBuy={onBuy}
@@ -412,7 +412,7 @@ export const BoxedViewLayout: React.FC<BoxedViewLayoutProps> = ({
 
       {/* Migrated Tokens Section */}
       <TokenSection
-        title="Migrated"
+        title="Migrated Tokens"
         tokens={migratedTokens}
         dataTimePeriod={dataTimePeriod}
         onBuy={onBuy}
