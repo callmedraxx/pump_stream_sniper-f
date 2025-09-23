@@ -7,7 +7,6 @@ import { LiveToken } from '@/types/token.types'
 import { AnimatedNumber, AnimatedPercentage } from '@/components/animated-number'
 import { AnimatedProgress } from '@/components/animated-progress'
 import { formatMarketCap, formatVolume, parseMarketCap } from '@/utils/format.utils'
-import { TokenImage } from './TokenImage'
 import { LiveAge } from './LiveAge'
 import { LiveSince } from './LiveSince'
 
@@ -29,26 +28,31 @@ const TokenBox: React.FC<TokenBoxProps> = ({
   rank
 }) => {
   return (
-    <Card className="relative overflow-hidden hover:shadow-lg transition-all duration-300 border-2 hover:border-primary/20 group">
-      <CardContent className="p-4">
+    <Card className="relative overflow-hidden hover:shadow-md transition-all duration-200 border-2 hover:border-primary/20 group rounded-2xl">
+      <CardContent className="p-3">
         {/* Header with rank and image */}
         <div className="flex items-start justify-between mb-3">
-          <div className="flex items-center gap-3">
-            <span className="text-xs font-mono text-muted-foreground bg-muted px-2 py-1 rounded">
+          <div className="flex items-center gap-2">
+            <span className="text-[10px] font-mono text-muted-foreground bg-muted px-1.5 py-0.5 rounded">
               #{rank}
             </span>
-            <div className="h-10 w-10 rounded-full overflow-hidden bg-muted flex-shrink-0">
+            <div className="h-8 w-8 rounded-full overflow-hidden bg-muted flex-shrink-0">
               {token.token_info.image_uri ? (
-                <TokenImage
+                <img
                   src={token.token_info.image_uri}
                   alt={token.token_info.symbol}
-                  symbol={token.token_info.symbol}
+                  className="h-full w-full object-cover"
+                  onError={(e) => {
+                    const target = e.target as HTMLImageElement;
+                    target.style.display = 'none';
+                    const fallback = target.parentElement?.querySelector('.fallback') as HTMLElement;
+                    if (fallback) fallback.style.display = 'flex';
+                  }}
                 />
-              ) : (
-                <div className="h-full w-full bg-gradient-to-br from-blue-400 to-purple-500 flex items-center justify-center text-white text-sm font-bold">
-                  {token.token_info.symbol?.charAt(0) || '?'}
-                </div>
-              )}
+              ) : null}
+              <div className="fallback h-full w-full bg-gradient-to-br from-blue-400 to-purple-500 flex items-center justify-center text-white text-xs font-bold">
+                {token.token_info.symbol?.charAt(0) || '?'}
+              </div>
             </div>
           </div>
           
@@ -64,12 +68,26 @@ const TokenBox: React.FC<TokenBoxProps> = ({
           <h3 className="font-semibold text-sm truncate mb-1">
             {token.token_info.name || 'Unnamed Token'}
           </h3>
-          <p className="text-xs text-muted-foreground mb-2">
-            ${token.token_info.symbol || 'UNKNOWN'}
+          <p className="text-[12px] text-muted-foreground mb-2 flex items-center gap-2">
+            <span className="truncate">${token.token_info.symbol || 'UNKNOWN'}</span>
+            {token.token_info.mint && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.preventDefault()
+                  e.stopPropagation()
+                  try { navigator.clipboard.writeText(token.token_info.mint) } catch (err) {}
+                }}
+                className="text-[10px] px-2 py-1 rounded bg-muted/20 hover:bg-muted/30"
+                title="Copy mint"
+              >
+                {token.token_info.mint.slice(0,8)}...{token.token_info.mint.slice(-6)}
+              </button>
+            )}
           </p>
           
           {/* Age and Live Since */}
-          <div className="flex justify-between text-xs text-muted-foreground mb-2">
+          <div className="flex justify-between text-[12px] text-muted-foreground mb-2">
             <div>
               Age: <LiveAge createdFormatted={token.creator_info.created_formatted || 'Unknown'} />
             </div>
@@ -80,27 +98,27 @@ const TokenBox: React.FC<TokenBoxProps> = ({
         </div>
 
         {/* Market Data */}
-        <div className="space-y-2 mb-4">
+  <div className="space-y-1 mb-3">
           {/* Market Cap and ATH */}
           <div className="flex justify-between items-center">
-            <span className="text-xs text-muted-foreground">MCAP</span>
+            <span className="text-[11px] text-muted-foreground">MCAP</span>
             <AnimatedNumber
               value={parseMarketCap(token.market_data.usd_market_cap)}
               previousValue={token._previousValues?.usd_market_cap ? parseMarketCap(token._previousValues.usd_market_cap) : undefined}
               formatFn={formatMarketCap}
-              className="text-xs font-medium"
+              className="text-[12px] font-medium"
               duration={1200}
             />
           </div>
 
           <div className="flex justify-between items-center">
-            <span className="text-xs text-muted-foreground">ATH</span>
+            <span className="text-[11px] text-muted-foreground">ATH</span>
             <div className="flex items-center gap-2">
               <AnimatedNumber
                 value={parseMarketCap(token.market_data.ath || '0')}
                 previousValue={token._previousValues?.ath ? parseMarketCap(token._previousValues.ath) : undefined}
                 formatFn={formatMarketCap}
-                className="text-xs font-medium"
+                className="text-[12px] font-medium"
                 duration={1200}
               />
             </div>
@@ -113,13 +131,15 @@ const TokenBox: React.FC<TokenBoxProps> = ({
                 value={token.market_data.progress_percentage}
                 previousValue={token._previousValues?.progress_percentage}
                 duration={1500}
-                className="w-full h-2"
+                className="w-full h-1.5"
+                currentMcap={parseFloat(token.market_data.usd_market_cap || '0')}
+                athMcap={parseFloat(token.market_data.ath || '0')}
               />
             </div>
           )}
 
           {/* Trading Stats */}
-          <div className="grid grid-cols-2 gap-2 text-xs">
+          <div className="grid grid-cols-2 gap-2 text-[12px]">
             <div className="flex justify-between">
               <span className="text-muted-foreground">Vol:</span>
               <AnimatedNumber
@@ -160,9 +180,54 @@ const TokenBox: React.FC<TokenBoxProps> = ({
             </div>
           </div>
 
+          {/* Small sparkline chart */}
+          <div className="mt-2 flex justify-center">
+            {(() => {
+              const rawCandles = (token.trading_info as any)?.candle_data ?? (token.raw_data as any)?.candle_data
+              if (!rawCandles || !Array.isArray(rawCandles) || rawCandles.length === 0) {
+                return <div className="h-8 w-24 bg-muted/30 rounded flex items-center justify-center text-[10px] text-muted-foreground">No chart</div>
+              }
+
+              const data = rawCandles.map((c: any) => {
+                if (c == null) return 0
+                if (typeof c === 'number') return c
+                const close = c.close ?? c[4] ?? 0
+                const n = parseFloat(String(close))
+                return isNaN(n) ? 0 : n
+              })
+
+              const w = 160
+              const h = 44
+              const pad = 4
+              const len = data.length
+              const min = Math.min(...data)
+              const max = Math.max(...data)
+              const range = max === min ? 1 : max - min
+              const step = len > 1 ? (w - pad * 2) / (len - 1) : 0
+              const points = data.map((v: number, i: number) => {
+                const x = pad + i * step
+                const y = pad + (1 - (v - min) / range) * (h - pad * 2)
+                return `${x.toFixed(2)},${y.toFixed(2)}`
+              }).join(' ')
+              const stroke = token._isUpdated ? '#16a34a' : '#7c3aed'
+              return (
+                <svg width={w} height={h} viewBox={`0 0 ${w} ${h}`} className="inline-block rounded">
+                  <polyline
+                    fill="none"
+                    stroke={stroke}
+                    strokeWidth={1.6}
+                    strokeLinejoin="round"
+                    strokeLinecap="round"
+                    points={points}
+                  />
+                </svg>
+              )
+            })()}
+          </div>
+
           {/* Viewers and Activity */}
           <div className="flex justify-between items-center">
-            <span className="text-xs text-muted-foreground">Viewers</span>
+            <span className="text-[12px] text-muted-foreground">Viewers</span>
             <div className="flex items-center gap-2">
               <AnimatedNumber
                 value={token.activity_info.viewers || 0}
@@ -179,6 +244,42 @@ const TokenBox: React.FC<TokenBoxProps> = ({
                 duration={1000}
               />
             </div>
+          </div>
+
+          {/* Dev Activity summary (buy/sell, amounts, since) */}
+          <div className="mt-2 text-[12px]">
+            {(() => {
+              const dev = (token.activity_info as any)?.dev_activity ?? (token.raw_data as any)?.dev_activity
+              if (!dev) return <div className="text-muted-foreground text-[12px]">No dev activity</div>
+              const isBuy = dev.type === 'buy'
+              const amountSOL = dev.amountSOL ?? dev.amountSol ?? dev.amount_sol ?? 0
+              const amountUSD = dev.amountUSD ?? dev.amountUsd ?? dev.amount_usd ?? 0
+                      return (
+                        <div className="grid grid-cols-3 gap-1 items-center">
+                          <div className="col-span-1">
+                            <div className="text-[11px] font-medium">{isBuy ? 'Dev Buy' : 'Dev Sell'}</div>
+                            <div className="text-[11px] text-muted-foreground"><LiveSince createdFormatted={dev.timestamp || dev.time || dev.ts} /></div>
+                          </div>
+                          <div className="col-span-1">
+                            <div className="text-[11px]">{Number(amountSOL).toFixed(2)} SOL</div>
+                            <div className="text-[11px] text-muted-foreground">{Number(amountUSD).toFixed(2)} USD</div>
+                          </div>
+                          <div className="col-span-1">
+                            {/* Creator balances */}
+                            {(() => {
+                              const sol = (token.activity_info as any)?.creator_balance_sol ?? (token.raw_data as any)?.creator_balance_sol
+                              const usd = (token.activity_info as any)?.creator_balance_usd ?? (token.raw_data as any)?.creator_balance_usd
+                              return (
+                                <div className="text-[11px] text-right">
+                                  {sol != null && <div>{Number(sol).toFixed(2)} SOL</div>}
+                                  {usd != null && <div className="text-muted-foreground">${Number(usd).toFixed(2)}</div>}
+                                </div>
+                              )
+                            })()}
+                          </div>
+                        </div>
+                      )
+            })()}
           </div>
         </div>
 
@@ -202,23 +303,68 @@ const TokenBox: React.FC<TokenBoxProps> = ({
         </div>
 
         {/* Links */}
-        <div className="flex gap-2">
-          <a
-            href={`https://pump.fun/coin/${token.token_info.mint}`}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex-1 text-center text-xs text-blue-500 hover:text-blue-600 py-1 px-2 bg-blue-50 hover:bg-blue-100 rounded transition-colors"
-          >
-            Pump.fun
-          </a>
-          <a
-            href={`https://gmgn.ai/sol/token/${token.token_info.mint}`}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex-1 text-center text-xs text-purple-500 hover:text-purple-600 py-1 px-2 bg-purple-50 hover:bg-purple-100 rounded transition-colors"
-          >
-            GMGN
-          </a>
+        <div className="space-y-2">
+          {/* Main Links */}
+          <div className="flex gap-2">
+            <a
+              href={`https://pump.fun/coin/${token.token_info.mint}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex-1 text-center text-xs text-blue-500 hover:text-blue-600 py-1 px-2 bg-blue-50 hover:bg-blue-100 rounded transition-colors"
+            >
+              Pump.fun
+            </a>
+            <a
+              href={`https://gmgn.ai/sol/token/${token.token_info.mint}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex-1 text-center text-xs text-purple-500 hover:text-purple-600 py-1 px-2 bg-purple-50 hover:bg-purple-100 rounded transition-colors"
+            >
+              GMGN
+            </a>
+          </div>
+          
+          {/* Social Links */}
+          {(() => {
+            const social = token.social_links ?? (token.raw_data as any)?.social_links ?? {}
+            return (social.twitter || social.website || social.telegram) && (
+              <div className="flex justify-center gap-3">
+                {social.twitter && (
+                  <a
+                    href={social.twitter}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-blue-400 hover:text-blue-500 text-sm transition-colors duration-200"
+                    title="Twitter"
+                  >
+                    𝕏
+                  </a>
+                )}
+                {social.website && (
+                  <a
+                    href={social.website}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-green-500 hover:text-green-600 text-sm transition-colors duration-200"
+                    title="Website"
+                  >
+                    🌐
+                  </a>
+                )}
+                {social.telegram && (
+                  <a
+                    href={social.telegram}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-blue-500 hover:text-blue-600 text-sm transition-colors duration-200"
+                    title="Telegram"
+                  >
+                    💬
+                  </a>
+                )}
+              </div>
+            )
+          })()}
         </div>
       </CardContent>
     </Card>

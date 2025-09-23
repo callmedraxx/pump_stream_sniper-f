@@ -1,4 +1,5 @@
 "use client"
+export const runtime = 'edge'
 
 import { useEffect, useState, useMemo, useRef, useCallback } from "react"
 import { useWallet, useConnection } from '@solana/wallet-adapter-react'
@@ -20,6 +21,7 @@ import { useTokenSorting } from "@/hooks/useTokenSorting"
 import { useTokenFiltering } from "@/hooks/useTokenFiltering"
 import { useSolBalance } from "@/hooks/useSolBalance"
 import { LiveToken } from "@/types/token.types"
+import { applyNotificationFilters } from "@/utils/filter.utils"
 import { TableHeader } from "../../components/TableHeader"
 import { TokenTableRow } from "../../components/TokenTableRow"
 import { PaginationControls } from "../../components/PaginationControls"
@@ -180,23 +182,21 @@ export default function Page() {
     } catch (e) {}
   }, [])
 
-  // Notification logic for newly live tokens (same as before)
+  // Notification logic for newly live tokens
   useEffect(() => {
     try {
       const prevSet = prevTokenMintsRef.current
       const newlyLive: LiveToken[] = []
 
-      const filtered = filterTokens(liveTokens)
-      const sortedByLiveSince = sortTokens(filtered, { sortBy: 'live_since', sortOrder: 'desc', dataTimePeriod: persistentSort.dataTimePeriod })
-
-      const TOP_N = 6
-      const topCandidates = sortedByLiveSince.slice(0, TOP_N)
-
-      for (const t of topCandidates) {
+      // Check all tokens for new ones, not just top N
+      for (const t of liveTokens) {
         const mint = t.token_info?.mint
         if (!mint) continue
         if (!prevSet.has(mint)) {
-          newlyLive.push(t)
+          // Check if this token passes notification filters
+          if (applyNotificationFilters(t, persistentFilters)) {
+            newlyLive.push(t)
+          }
         }
       }
 
@@ -221,7 +221,7 @@ export default function Page() {
     } catch (e) {
       // swallow errors in notification logic
     }
-  }, [liveTokens, playSound, soundEnabled, isReady])
+  }, [liveTokens, playSound, soundEnabled, isReady, persistentFilters])
 
   // Reset to first page when sorting changes (table view only)
   useEffect(() => {
@@ -640,7 +640,7 @@ export default function Page() {
                           ) : (
                             currentTokens.map((token, index) => (
                               <TokenTableRow
-                                key={token.token_info.mint}
+                                key={`${token.token_info.mint}-${token._updatedAt || 0}`}
                                 token={token}
                                 index={index}
                                 startIndex={startIndex}

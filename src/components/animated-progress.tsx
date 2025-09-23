@@ -9,6 +9,9 @@ interface AnimatedProgressProps {
   duration?: number
   className?: string
   showPercentage?: boolean
+  // New props for ATH sparkle logic
+  currentMcap?: number
+  athMcap?: number
 }
 
 export function AnimatedProgress({
@@ -16,7 +19,9 @@ export function AnimatedProgress({
   previousValue,
   duration = 3000,
   className = "",
-  showPercentage = false
+  showPercentage = false,
+  currentMcap,
+  athMcap
 }: AnimatedProgressProps) {
   const [currentValue, setCurrentValue] = useState(previousValue ?? value)
   const [isAnimating, setIsAnimating] = useState(false)
@@ -24,10 +29,10 @@ export function AnimatedProgress({
   const animationRef = useRef<number | null>(null)
 
   useEffect(() => {
-    // Start animation when the target value changes. We deliberately avoid
-    // including `currentValue` in the dependency array — updating
-    // `currentValue` during animation should not restart the effect.
-    if (value !== currentValue) {
+    // Always animate when the target value changes, even for small differences
+    // Use a small threshold to avoid unnecessary animations for tiny changes
+    const valueDiff = Math.abs(value - currentValue)
+    if (valueDiff > 0.01) { // Changed from strict equality to allow small changes
       setIsAnimating(true)
       const startValue = currentValue
       const endValue = value
@@ -66,15 +71,28 @@ export function AnimatedProgress({
     return "bg-red-500"
   }
 
+  const shouldSparkle = () => {
+    // Sparkle when progress is near completion (98%+) or very low (2%-)
+    if (currentValue >= 98 || currentValue <= 2) return true
+    
+    // Sparkle when market cap is within 5% of ATH
+    if (currentMcap && athMcap && athMcap > 0) {
+      const percentFromAth = ((athMcap - currentMcap) / athMcap) * 100
+      return percentFromAth <= 5 // Within 5% of ATH
+    }
+    
+    return false
+  }
+
   return (
     <div className={`space-y-1 ${className}`}>
       <div className="relative">
         <Progress 
           value={Math.min(currentValue, 100)} 
-          className={`h-2 transition-all duration-300 ${isAnimating ? 'animate-pulse' : ''}`}
+          className={`h-2`}
         />
         <div 
-          className={`absolute inset-0 h-2 ${getProgressColor(currentValue)} rounded-full transition-all duration-500 ease-out`}
+          className={`absolute inset-0 h-2 ${getProgressColor(currentValue)} rounded-full overflow-hidden`}
           style={{ 
             width: `${Math.min(currentValue, 100)}%`,
             background: `linear-gradient(90deg, ${
@@ -85,7 +103,37 @@ export function AnimatedProgress({
               currentValue >= 50 ? '#ca8a04' : '#dc2626'
             })`
           }}
-        />
+        >
+          {/* Enhanced sparkle indicator */}
+          {shouldSparkle() && (
+            <div
+              className="absolute right-0 top-1/2 -translate-y-1/2 mr-[-8px] pointer-events-none"
+              style={{ transform: 'translateY(-50%)' }}
+            >
+              {/* Multiple sparkle effects for ATH proximity */}
+              {currentMcap && athMcap && athMcap > 0 && 
+               ((athMcap - currentMcap) / athMcap) * 100 <= 5 ? (
+                // Enhanced sparkle for near-ATH tokens
+                <div className="relative">
+                  <div className="animate-ping absolute inset-0 rounded-full bg-yellow-400 opacity-75"></div>
+                  <div className="animate-pulse absolute inset-0 rounded-full bg-yellow-300 opacity-50"></div>
+                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" 
+                       className="relative z-10 animate-ath-sparkle">
+                    <path d="M12 2l1.9 4.2L18 8l-4.2 1.9L12 14l-1.9-4.1L6 8l4.1-1.8L12 2z" fill="#fbbf24" opacity="1" />
+                    <path d="M12 2l1.9 4.2L18 8l-4.2 1.9L12 14l-1.9-4.1L6 8l4.1-1.8L12 2z" fill="#f59e0b" opacity="0.8" />
+                    <circle cx="12" cy="12" r="11" stroke="#fbbf24" strokeWidth="2" opacity="0.6" />
+                  </svg>
+                </div>
+              ) : (
+                // Regular sparkle for progress extremes
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className="animate-sparkle">
+                  <path d="M12 2l1.9 4.2L18 8l-4.2 1.9L12 14l-1.9-4.1L6 8l4.1-1.8L12 2z" fill="white" opacity="0.95" />
+                  <circle cx="12" cy="12" r="10" stroke="rgba(255,255,255,0.15)" />
+                </svg>
+              )}
+            </div>
+          )}
+        </div>
       </div>
       {showPercentage && (
         <div className="text-xs text-center text-muted-foreground">

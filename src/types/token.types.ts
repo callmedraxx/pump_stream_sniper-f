@@ -10,6 +10,9 @@ export interface LiveToken {
     metadata_uri?: string | null
     video_uri?: string | null
   }
+  // optional normalized candle data (array of numbers or array of objects)
+  // keep as any to be resilient to backend shapes
+  candle_data?: any
   market_data: {
     market_cap: string
     usd_market_cap: string
@@ -20,6 +23,11 @@ export interface LiveToken {
   creator_info: {
     creator: string
     created_formatted?: string
+    // Creator-level metadata
+    created_count?: number | null
+    created_coin_count?: number | null
+    creator_balance_sol?: number | null
+    creator_balance_usd?: number | null
   }
   social_links: {
     twitter?: string | null
@@ -75,6 +83,13 @@ export interface LiveToken {
     creator: string
     dev_buy?: number | null
     dev_sell?: number | null
+    // Normalized dev activity blob (if backend provides a dev_activity object)
+    dev_activity?: any | null
+    // Creator balances mirrored here for UI convenience
+    creator_balance_sol?: number | null
+    creator_balance_usd?: number | null
+    // Number of coins created by the creator
+    created_coin_count?: number | null
     sniping?: boolean | null
     last_updated?: string | null
     viewers: number

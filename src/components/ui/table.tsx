@@ -5,16 +5,78 @@ import * as React from "react"
 import { cn } from "@/lib/utils"
 
 function Table({ className, ...props }: React.ComponentProps<"table">) {
+  const containerRef = React.useRef<HTMLDivElement | null>(null)
+  
+  const scrollBy = (amount: number, behavior: ScrollBehavior = 'smooth') => {
+    if (!containerRef.current) return
+    containerRef.current.scrollBy({ left: amount, behavior })
+  }
+
+  // Hold-to-scroll implementation
+  const rafRef = React.useRef<number | null>(null)
+  const directionRef = React.useRef<number>(0)
+  const speedRef = React.useRef<number>(300) // pixels per second
+
+  const stopHoldScroll = () => {
+    if (rafRef.current) cancelAnimationFrame(rafRef.current)
+    rafRef.current = null
+    directionRef.current = 0
+  }
+
+  const startHoldScroll = (dir: number) => {
+    stopHoldScroll()
+    directionRef.current = dir
+    let last = performance.now()
+    const step = (now: number) => {
+      const elapsed = now - last
+      last = now
+      const distance = (speedRef.current * (elapsed / 1000)) * directionRef.current
+      if (containerRef.current) containerRef.current.scrollLeft += distance
+      rafRef.current = requestAnimationFrame(step)
+    }
+    rafRef.current = requestAnimationFrame(step)
+  }
+
   return (
-    <div
-      data-slot="table-container"
-      className="relative w-full overflow-x-auto"
-    >
-      <table
-        data-slot="table"
-        className={cn("w-full caption-bottom text-sm", className)}
-        {...props}
-      />
+    <div className="relative w-full">
+  <div className="fixed left-4 top-1/2 -translate-y-1/2 z-[9999]">
+        <button
+          aria-label="Scroll left"
+          onClick={() => scrollBy(-300)}
+          onPointerDown={() => startHoldScroll(-1)}
+          onPointerUp={() => stopHoldScroll()}
+          onPointerLeave={() => stopHoldScroll()}
+          className="p-2 rounded-lg bg-black/50 hover:bg-black/60 text-white text-xs shadow-lg table-scroll-btn"
+          style={{ backdropFilter: 'blur(4px)', cursor: 'pointer' }}
+        >
+          ◀
+        </button>
+      </div>
+  <div className="fixed right-4 top-1/2 -translate-y-1/2 z-[9999]">
+        <button
+          aria-label="Scroll right"
+          onClick={() => scrollBy(300)}
+          onPointerDown={() => startHoldScroll(1)}
+          onPointerUp={() => stopHoldScroll()}
+          onPointerLeave={() => stopHoldScroll()}
+          className="p-2 rounded-lg bg-black/50 hover:bg-black/60 text-white text-xs shadow-lg table-scroll-btn"
+          style={{ backdropFilter: 'blur(4px)', cursor: 'pointer' }}
+        >
+          ▶
+        </button>
+      </div>
+
+      <div
+        ref={containerRef}
+        data-slot="table-container"
+        className="relative w-full overflow-x-auto"
+      >
+        <table
+          data-slot="table"
+          className={cn("w-full caption-bottom text-xs", className)}
+          {...props}
+        />
+      </div>
     </div>
   )
 }
@@ -70,7 +132,7 @@ function TableHead({ className, ...props }: React.ComponentProps<"th">) {
     <th
       data-slot="table-head"
       className={cn(
-        "text-foreground h-10 px-2 text-left align-middle font-medium whitespace-nowrap [&:has([role=checkbox])]:pr-0 [&>[role=checkbox]]:translate-y-[2px]",
+        "text-foreground h-10 px-2 text-left align-middle font-medium whitespace-nowrap text-xs [&:has([role=checkbox])]:pr-0 [&>[role=checkbox]]:translate-y-[2px]",
         className
       )}
       {...props}
@@ -83,7 +145,7 @@ function TableCell({ className, ...props }: React.ComponentProps<"td">) {
     <td
       data-slot="table-cell"
       className={cn(
-        "p-2 align-middle whitespace-nowrap [&:has([role=checkbox])]:pr-0 [&>[role=checkbox]]:translate-y-[2px]",
+        "p-2 align-middle whitespace-nowrap text-xs [&:has([role=checkbox])]:pr-0 [&>[role=checkbox]]:translate-y-[2px]",
         className
       )}
       {...props}

@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useRef, useState, useCallback } from 'react'
+import { mergeTokenWithChanges, transformBackendToken } from './socket-helpers'
 
 
 interface LiveToken {
@@ -39,92 +40,7 @@ function safeParseFormattedNumber(value: any) {
   return 0
 }
 
-// Transform function
-function transformBackendToken(backendToken: any): LiveToken {
-  return {
-    token_info: {
-      mint: backendToken.mint_address || backendToken.token_info?.mint || backendToken.mint || '',
-      name: backendToken.name || backendToken.token_info?.name || '',
-      symbol: backendToken.symbol || backendToken.token_info?.symbol || '',
-      description: backendToken.description || backendToken.token_info?.description || null,
-      image_uri: backendToken.image_url || backendToken.token_info?.image_uri || null
-    },
-    market_data: {
-      market_cap: backendToken.mcap || backendToken.market_data?.market_cap || '0',
-      usd_market_cap: backendToken.mcap || backendToken.market_data?.usd_market_cap || '0',
-      progress_percentage: parseFloat(backendToken.progress) || backendToken.market_data?.progress_percentage || 0,
-      last_trade_formatted: backendToken.market_data?.last_trade_formatted || null,
-      ath: backendToken.ath || backendToken.market_data?.ath || null
-    },
-    creator_info: {
-      creator: backendToken.creator || backendToken.creator_info?.creator || '',
-      created_formatted: backendToken.age || backendToken.creator_info?.created_formatted || ''
-    },
-    social_links: {
-      twitter: backendToken.social_links?.twitter || null,
-      website: backendToken.social_links?.website || null
-    },
-    status_flags: {
-      is_currently_live: backendToken.is_live || backendToken.status_flags?.is_currently_live || false,
-      nsfw: backendToken.nsfw || backendToken.status_flags?.nsfw || false,
-      show_name: backendToken.status_flags?.show_name ?? true,
-      is_active: backendToken.is_active || backendToken.status_flags?.is_active || false
-    },
-    trading_info: {
-      virtual_sol_reserves: backendToken.pool_info?.virtual_sol_reserves || backendToken.trading_info?.virtual_sol_reserves || 0,
-      real_sol_reserves: backendToken.pool_info?.real_sol_reserves || backendToken.trading_info?.real_sol_reserves || 0,
-      total_sol: (backendToken.pool_info?.virtual_sol_reserves || 0) + (backendToken.pool_info?.real_sol_reserves || 0),
-      progress_percentage: parseFloat(backendToken.progress) || backendToken.trading_info?.progress_percentage || 0,
-      last_trade_timestamp: backendToken.activity?.last_trade_timestamp || backendToken.trading_info?.last_trade_timestamp || null,
-      last_trade_formatted: backendToken.trading_info?.last_trade_formatted || null,
-      market_cap: backendToken.mcap || backendToken.trading_info?.market_cap || '0',
-      usd_market_cap: backendToken.mcap || backendToken.trading_info?.usd_market_cap || '0',
-      volume_24h: safeParseFormattedNumber(backendToken.volume?.['24h'] || backendToken.trading_info?.volume_24h || 0),
-      txns_24h: safeParseFormattedNumber(backendToken.txns?.['24h'] || backendToken.trading_info?.txns_24h || 0),
-      traders_24h: safeParseFormattedNumber(backendToken.traders?.['24h'] || backendToken.trading_info?.traders_24h || 0),
-      price_change_24h: safeParseFormattedNumber(backendToken.price_changes?.['24h'] || backendToken.trading_info?.price_change_24h || 0),
-      volume_5m: safeParseFormattedNumber(backendToken.volume?.['5m'] || backendToken.trading_info?.volume_5m || 0),
-      volume_1h: safeParseFormattedNumber(backendToken.volume?.['1h'] || backendToken.trading_info?.volume_1h || 0),
-      volume_6h: safeParseFormattedNumber(backendToken.volume?.['6h'] || backendToken.trading_info?.volume_6h || 0),
-      txns_5m: safeParseFormattedNumber(backendToken.txns?.['5m'] || backendToken.trading_info?.txns_5m || 0),
-      txns_1h: safeParseFormattedNumber(backendToken.txns?.['1h'] || backendToken.trading_info?.txns_1h || 0),
-      txns_6h: safeParseFormattedNumber(backendToken.txns?.['6h'] || backendToken.trading_info?.txns_6h || 0),
-      traders_5m: safeParseFormattedNumber(backendToken.traders?.['5m'] || backendToken.trading_info?.traders_5m || 0),
-      traders_1h: safeParseFormattedNumber(backendToken.traders?.['1h'] || backendToken.trading_info?.traders_1h || 0),
-      traders_6h: safeParseFormattedNumber(backendToken.traders?.['6h'] || backendToken.trading_info?.traders_6h || 0),
-      price_change_5m: safeParseFormattedNumber(backendToken.price_changes?.['5m'] || backendToken.trading_info?.price_change_5m || 0),
-      price_change_1h: safeParseFormattedNumber(backendToken.price_changes?.['1h'] || backendToken.trading_info?.price_change_1h || 0),
-      price_change_6h: safeParseFormattedNumber(backendToken.price_changes?.['6h'] || backendToken.trading_info?.price_change_6h || 0)
-    },
-    pool_info: {
-      complete: backendToken.pool_info?.complete || false,
-      is_currently_live: backendToken.is_live || backendToken.pool_info?.is_currently_live || false,
-      king_of_hill_timestamp: backendToken.pool_info?.king_of_hill_timestamp || null,
-      last_reply: backendToken.activity?.last_reply || backendToken.pool_info?.last_reply || null,
-      reply_count: backendToken.activity?.reply_count || backendToken.viewers || backendToken.pool_info?.reply_count || 0,
-      raydium_pool: backendToken.pool_info?.raydium_pool || null,
-      curve_threshold: backendToken.pool_info?.curve_threshold || null
-    },
-    activity_info: {
-      created_timestamp: backendToken.timestamps?.created_at ? new Date(backendToken.timestamps.created_at).getTime() / 1000 : backendToken.activity_info?.created_timestamp || null,
-      created_formatted: backendToken.age || backendToken.activity_info?.created_formatted || '',
-      nsfw: backendToken.nsfw || backendToken.activity_info?.nsfw || false,
-      show_name: backendToken.activity_info?.show_name ?? true,
-      creator: backendToken.creator || backendToken.activity_info?.creator || '',
-      dev_buy: backendToken.holders?.creator_holding_percentage || backendToken.activity_info?.dev_buy || null,
-      dev_sell: backendToken.activity_info?.dev_sell || null,
-      sniping: backendToken.holders?.creator_is_top_holder || backendToken.activity_info?.sniping || null,
-      last_updated: backendToken.timestamps?.updated_at || backendToken.activity_info?.last_updated || null,
-      viewers: safeParseFormattedNumber(backendToken.viewers || backendToken.activity_info?.viewers || 0)
-    },
-    raw_data: backendToken
-    ,
-    timestamps: {
-      created_at: backendToken.timestamps?.created_at ?? null,
-      updated_at: backendToken.timestamps?.updated_at ?? null,
-    }
-  }
-}
+// use canonical transformer from socket-helpers for consistency
 
 
 type ConnectionState = 'connecting' | 'connected' | 'disconnected' | 'error'
@@ -317,55 +233,172 @@ class WebSocketService {
   }
 
   private handleMessage(data: string) {
-    try {
-      const msg = JSON.parse(data)
+  try {
+    const msg = JSON.parse(data)
+    
+    // Handle heartbeat/pong
+    if (msg?.event === 'heartbeat') {
+      this.sendMessage({ event: 'pong', timestamp: Date.now() })
+      return
+    }
+
+    if (msg?.event === 'pong') {
+      console.debug('[WebSocketService] pong received')
+      return
+    }
+
+    // NEW: Handle individual token updates batch from backend
+    if (msg?.event === 'token_updates_batch') {
+      //console.log(`[WebSocketService] received token batch update: ${msg.data?.batch_size || 0} tokens`)
       
-      // Handle heartbeat/pong
-      if (msg?.event === 'heartbeat') {
-        this.sendMessage({ event: 'pong', timestamp: Date.now() })
-        return
-      }
-
-      if (msg?.event === 'pong') {
-        console.debug('[WebSocketService] pong received')
-        return
-      }
-
-      // Handle token updates
-      if (msg?.data?.tokens && Array.isArray(msg.data.tokens)) {
-        const transformed = msg.data.tokens.map(transformBackendToken)
-        this.tokens = transformed
-
-        // Update token storage
-        // const tokenData: TokenData = {
-        //   event: msg.event || 'live_tokens_update',
-        //   timestamp: msg.timestamp || new Date().toISOString(),
-        //   token_count: transformed.length,
-        //   data: transformed,
-        //   last_sse_update: new Date().toISOString(),
-        //   backend_total_count: transformed.length
-        // }
-
-        // try {
-        //   tokenStorage.setTokens(tokenData)
-        // } catch (error) {
-        //   console.error('[WebSocketService] error saving to storage:', error)
-        // }
-
-        // Notify all subscribers
+      if (msg.data?.updates && Array.isArray(msg.data.updates)) {
+        // Process each individual token update
+        msg.data.updates.forEach((tokenUpdate: any) => {
+          const transformed = transformBackendToken(tokenUpdate)
+          // Log the transformed (canonicalized) token for inspection
+          try { console.log('[WebSocketService] token batch transformed:', transformed) } catch (e) {}
+          const mint = transformed.token_info?.mint
+          
+          if (!mint) return
+          
+          const idx = this.tokens.findIndex(x => x.token_info?.mint === mint)
+          
+          // Token not in current list
+          if (idx === -1) {
+            // Add if it's live
+            if (transformed.status_flags?.is_currently_live) {
+              this.tokens = [transformed, ...this.tokens]
+            }
+            return
+          }
+          
+          // Token exists - update it
+          const existing = this.tokens[idx]
+          
+          // Remove if no longer live
+          if (!transformed.status_flags?.is_currently_live) {
+            this.tokens.splice(idx, 1)
+            return
+          }
+          
+          // Merge the update into existing token
+          const merged = mergeTokenWithChanges(existing, transformed)
+          this.tokens[idx] = merged
+        })
+        
+        // Notify listeners of all changes at once
         this.listeners.forEach(callback => {
-          try {
-            callback(transformed)
-          } catch (error) {
-            console.error('[WebSocketService] error calling listener:', error)
+          try { 
+            callback([...this.tokens]) 
+          } catch (error) { 
+            console.error('[WebSocketService] error calling listener:', error) 
           }
         })
       }
-
-    } catch (error) {
-      console.error('[WebSocketService] message parse error:', error)
+      return
     }
+
+    // Handle initial full snapshot (tokens_update event)
+    if (msg?.event === 'tokens_update' && msg?.data?.tokens && Array.isArray(msg.data.tokens)) {
+      console.log(`[WebSocketService] received full snapshot: ${msg.data.tokens.length} tokens`)
+      const transformed = msg.data.tokens.map(transformBackendToken)
+      this.tokens = transformed
+
+      // Notify all subscribers
+      this.listeners.forEach(callback => {
+        try {
+          callback(transformed)
+        } catch (error) {
+          console.error('[WebSocketService] error calling listener:', error)
+        }
+      })
+      return
+    }
+
+    // Legacy: Handle single token updates (keep for backward compatibility)
+      const singleCandidate = msg?.data?.token ?? (Array.isArray(msg?.data?.tokens) && msg.data.tokens.length === 1 ? msg.data.tokens[0] : null)
+      if (singleCandidate) {
+        // Transform and debug-log the canonical token (avoid logging raw payload)
+        const t = transformBackendToken(singleCandidate)
+  try { console.log('[WebSocketService] single token transformed:', t) } catch (e) {}
+      const mint = t.token_info?.mint
+      const idx = this.tokens.findIndex(x => x.token_info?.mint === mint)
+
+      // Not present in current list -> add if indicated live
+      if (idx === -1) {
+        if (t.status_flags?.is_currently_live) {
+          this.tokens = [t, ...this.tokens]
+          this.listeners.forEach(callback => {
+            try { callback([...this.tokens]) } catch (error) { console.error('[WebSocketService] error calling listener:', error) }
+          })
+        }
+        return
+      }
+
+      // Present in the list
+      const existing = this.tokens[idx]
+
+      // If update indicates it is no longer live -> remove
+      if (!t.status_flags?.is_currently_live) {
+        this.tokens.splice(idx, 1)
+        this.listeners.forEach(callback => {
+          try { callback([...this.tokens]) } catch (error) { console.error('[WebSocketService] error calling listener:', error) }
+        })
+        return
+      }
+
+      // Merge changed fields into existing token
+      const merged = mergeTokenWithChanges(existing, t)
+      this.tokens[idx] = merged
+
+      // Notify listeners
+      this.listeners.forEach(callback => {
+        try { callback([...this.tokens]) } catch (error) { console.error('[WebSocketService] error calling listener:', error) }
+      })
+      return
+    }
+
+    // Handle any other bulk token updates (fallback) - merge per-token to preserve existing fields
+    if (msg?.data?.tokens && Array.isArray(msg.data.tokens)) {
+      const incoming = msg.data.tokens.map(transformBackendToken)
+
+      // Debug: log summary of fallback bulk update and a small sample of incoming mints
+      try {
+        const sampleMints = incoming.slice(0, 5).map((t: any) => t?.token_info?.mint).filter(Boolean)
+        console.log(`[WebSocketService] fallback bulk tokens update: ${incoming.length} tokens, sample mints:`, sampleMints)
+      } catch (err) {
+        console.debug('[WebSocketService] logging failed for fallback bulk tokens update')
+      }
+
+      // Merge into existing tokens array: update existing tokens, add new ones
+      for (const token of incoming) {
+        const mint = token?.token_info?.mint
+        if (!mint) continue
+        const idx = this.tokens.findIndex(x => x.token_info?.mint === mint)
+        if (idx === -1) {
+          // New token - push to front for visibility
+          this.tokens = [token, ...this.tokens]
+        } else {
+          // Merge into existing
+          const merged = mergeTokenWithChanges(this.tokens[idx], token)
+          this.tokens[idx] = merged
+        }
+      }
+
+      // Notify listeners with the updated list
+      this.listeners.forEach(callback => {
+        try {
+          callback([...this.tokens])
+        } catch (error) {
+          console.error('[WebSocketService] error calling listener:', error)
+        }
+      })
+    }
+
+  } catch (error) {
+    console.error('[WebSocketService] message parse error:', error)
   }
+}
 
   private sendMessage(msg: any) {
     if (this.ws?.readyState === WebSocket.OPEN) {
