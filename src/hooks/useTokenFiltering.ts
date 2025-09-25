@@ -10,12 +10,15 @@ export const useTokenFiltering = () => {
       const saved = localStorage.getItem('tokenTableFilters')
       if (saved) {
         const parsed = JSON.parse(saved) as FilterPreferences
+        console.log('[useTokenFiltering] 📁 Loaded saved filters:', parsed)
         setPersistentFilters(parsed)
       } else {
+        console.log('[useTokenFiltering] 📁 No saved filters, using null')
         setPersistentFilters(null)
       }
     } catch (e) {
       console.warn('Failed to load filters', e)
+      console.log('[useTokenFiltering] 📁 Error loading filters, setting excludeMigrated: true')
       setPersistentFilters({ excludeMigrated: true })
     }
   }, [])
@@ -32,8 +35,9 @@ export const useTokenFiltering = () => {
 
   const filterTokens = useCallback((tokens: LiveToken[]) => {
     if (!tokens || tokens.length === 0) return tokens
-  const effective = { ...(persistentFilters || {}) }
-  return applyFilters(tokens, effective)
+    const effective = { ...(persistentFilters || {}) }
+    const filtered = applyFilters(tokens, effective)
+    return filtered
   }, [persistentFilters])
 
   return {

@@ -16,7 +16,8 @@ import {
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Button } from "@/components/ui/button"
 import { Table, Grid3X3 } from "lucide-react"
-import { useWebsocket } from "@/hooks/use-websocket"
+import { useVirtualizer } from '@tanstack/react-virtual'
+import { useTokens } from '@/hooks/useTokens'
 import { useTokenSorting } from "@/hooks/useTokenSorting"
 import { useTokenFiltering } from "@/hooks/useTokenFiltering"
 import { useSolBalance } from "@/hooks/useSolBalance"
@@ -27,6 +28,7 @@ import { TokenTableRow } from "../../components/TokenTableRow"
 import { PaginationControls } from "../../components/PaginationControls"
 import { SolBalanceSidebar } from "../../components/SolBalanceSidebar"
 import { BoxedViewLayout } from "../../components/BoxedViewLayout"
+import { useUIStore } from "../../stores/uiStore"
 
 // Audio Context Hook (same as before)
 const useAudioContext = () => {
@@ -115,18 +117,21 @@ const useAudioContext = () => {
 }
 
 export default function Page() {
-  // All existing hooks and state (same as before)
-  const {
-    tokens: liveTokens,
-    connect: reconnect,
-    disconnect,
-    isConnected
-  } = useWebsocket({
-    onTokenUpdate: (tokens) => {
-      // console.log('Tokens updated from WebSocket:', tokens.length)
-    }
-  })
+  // Use TanStack Query for tokens
+  const { data: liveTokens = [] } = useTokens()
 
+  // Use Zustand for UI state
+  const {
+    viewMode,
+    setViewMode,
+    searchQuery,
+    setSearchQuery,
+    currentPage,
+    setCurrentPage,
+    pageSize,
+  } = useUIStore()
+
+  // All existing hooks and state (same as before)
   const { persistentSort, saveSortPreferences, sortTokens } = useTokenSorting()
   const { persistentFilters, saveFilters, filterTokens } = useTokenFiltering()
   const { sol: walletSolBalance, error: balanceError } = useSolBalance()
@@ -136,23 +141,16 @@ export default function Page() {
   const [uiSelection, setUiSelection] = useState<string>('24h')
   const [dataTimePeriod, setDataTimePeriod] = useState<string>('24h')
   const [tokens, setTokens] = useState<LiveToken[]>([])
-  const [searchQuery, setSearchQuery] = useState<string>('')
   const [soundEnabled, setSoundEnabled] = useState(true)
   const [quickSellPercent, setQuickSellPercent] = useState<number | undefined>(undefined)
   const [isTrading, setIsTrading] = useState<boolean>(false)
 
-  // NEW: View mode state
-  const [viewMode, setViewMode] = useState<'table' | 'boxed'>('table')
-
+  // Refs for virtualization and notifications
   const prevTokenMintsRef = useRef<Set<string>>(new Set())
+  const tableContainerRef = useRef<HTMLDivElement>(null)
+
   const wallet = useWallet()
   const { connection } = useConnection()
-
-  // Pagination state (only used in table view)
-  const [currentPage, setCurrentPage] = useState<number>(1)
-  const [itemsPerPage] = useState<number>(48)
-
-  // Load view mode preference from localStorage
   useEffect(() => {
     try {
       const savedViewMode = localStorage.getItem('viewMode')
@@ -162,7 +160,7 @@ export default function Page() {
     } catch (e) {
       console.warn('Failed to load view mode preference:', e)
     }
-  }, [])
+  }, [setViewMode])
 
   // Save view mode preference to localStorage
   const handleViewModeChange = (mode: 'table' | 'boxed') => {
@@ -190,7 +188,7 @@ export default function Page() {
 
       // Check all tokens for new ones, not just top N
       for (const t of liveTokens) {
-        const mint = t.token_info?.mint
+        const mint = t.mint_address
         if (!mint) continue
         if (!prevSet.has(mint)) {
           // Check if this token passes notification filters
@@ -210,14 +208,14 @@ export default function Page() {
         newlyLive.slice(0, 3).forEach(t => {
           toast.success(
             <div className="flex flex-col gap-1">
-              <span>🔔 New live token: {t.token_info.symbol}</span>
-              <span className="text-sm text-gray-600">{t.token_info.name}</span>
+              <span>🔔 New live token: {t.symbol}</span>
+              <span className="text-sm text-gray-600">{t.name}</span>
             </div>
           )
         })
       }
 
-      prevTokenMintsRef.current = new Set(liveTokens.map(t => t.token_info?.mint).filter(Boolean) as string[])
+      prevTokenMintsRef.current = new Set(liveTokens.map(t => t.mint_address).filter(Boolean) as string[])
     } catch (e) {
       // swallow errors in notification logic
     }
@@ -248,9 +246,9 @@ export default function Page() {
       const q = searchQuery.trim().toLowerCase()
       if (q.length > 0) {
         filtered = filtered.filter(t => {
-          const symbol = (t.token_info?.symbol || '').toLowerCase()
-          const name = (t.token_info?.name || '').toLowerCase()
-          const mint = (t.token_info?.mint || '').toLowerCase()
+          const symbol = (t.symbol || '').toLowerCase()
+          const name = (t.name || '').toLowerCase()
+          const mint = (t.mint_address || '').toLowerCase()
           return symbol.includes(q) || name.includes(q) || mint.includes(q)
         })
       }
@@ -260,10 +258,12 @@ export default function Page() {
   }, [liveTokens, persistentSort.sortBy, persistentSort.sortOrder, persistentSort.dataTimePeriod, sortTokens, filterTokens, searchQuery, viewMode])
 
   // Calculate pagination values (table view only)
-  const totalPages = Math.ceil(sortedTokens.length / itemsPerPage)
-  const startIndex = (currentPage - 1) * itemsPerPage
-  const endIndex = startIndex + itemsPerPage
+  const totalPages = Math.ceil(sortedTokens.length / pageSize)
+  const startIndex = (currentPage - 1) * pageSize
+  const endIndex = startIndex + pageSize
   const currentTokens = sortedTokens.slice(startIndex, endIndex)
+
+
 
   // Reset to first page when tokens change significantly (table view only)
   useEffect(() => {
@@ -274,7 +274,7 @@ export default function Page() {
 
   const getCreatorCount = (creator: string) => {
     return sortedTokens.filter(token => 
-      (token.creator_info.creator || 'Unknown') === creator
+      (token.creator || 'Unknown') === creator
     ).length
   }
 
@@ -303,7 +303,7 @@ export default function Page() {
       return
     }
 
-    console.log('Buy requested', token.token_info.symbol, 'amountSOL=', amountSOL)
+  console.log('Buy requested', token.symbol, 'amountSOL=', amountSOL)
     setIsTrading(true)
 
     try {
@@ -320,15 +320,15 @@ export default function Page() {
       }
 
       const tokenData = {
-        raydiumPool: token.pool_info.raydium_pool,
+        raydiumPool: token.raydium_pool,
         pumpSwapPool: (token.raw_data as any)?.pump_swap_pool || null,
-        complete: token.pool_info.complete
+        complete: token.complete
       }
 
       const result = await executeBuyTransaction(
         connection, 
         wallet, 
-        token.token_info.mint, 
+        token.mint_address, 
         amountSOL,
         { 
           simulate: true,
@@ -338,7 +338,7 @@ export default function Page() {
 
       toast.success(
         <div className="flex flex-col gap-1">
-          <span>✅ Successfully bought {token.token_info.symbol}!</span>
+            <span>✅ Successfully bought {token.symbol}!</span>
           <a 
             href={result.explorerUrl} 
             target="_blank" 
@@ -350,7 +350,7 @@ export default function Page() {
         </div>
       )
 
-      console.log('Buy successful:', result)
+  console.log('Buy successful:', result)
     } catch (e: any) {
       console.error('Buy failed:', e)
       const errorMessage = e?.message || 'Buy transaction failed'
@@ -377,12 +377,12 @@ export default function Page() {
     }
 
     const sellPercent = typeof percent === 'number' ? percent : (quickSellPercent ?? 25)
-    console.log('Sell requested', token.token_info.symbol, 'percent=', sellPercent)
+  console.log('Sell requested', token.symbol, 'percent=', sellPercent)
     setIsTrading(true)
 
     try {
       try {
-        const mintPubkey = new PublicKey(token.token_info.mint)
+  const mintPubkey = new PublicKey(token.mint_address)
         const associatedTokenAddress = await getAssociatedTokenAddress(
           mintPubkey,
           wallet.publicKey,
@@ -415,15 +415,15 @@ export default function Page() {
       }
 
       const tokenData = {
-        raydiumPool: token.pool_info.raydium_pool,
+        raydiumPool: token.raydium_pool,
         pumpSwapPool: (token.raw_data as any)?.pump_swap_pool || null,
-        complete: token.pool_info.complete
+        complete: token.complete
       }
 
       const result = await executeSellTransaction(
         connection, 
         wallet, 
-        token.token_info.mint, 
+        token.mint_address, 
         sellPercent,
         { 
           simulate: true,
@@ -433,7 +433,7 @@ export default function Page() {
 
       toast.success(
         <div className="flex flex-col gap-1">
-          <span>✅ Successfully sold {sellPercent}% of {token.token_info.symbol}!</span>
+          <span>✅ Successfully sold {sellPercent}% of {token.symbol}!</span>
           <a 
             href={result.explorerUrl} 
             target="_blank" 
@@ -606,7 +606,6 @@ export default function Page() {
 
               {/* Content Area - Conditional Rendering */}
               {viewMode === 'table' ? (
-                /* Table View */
                 <div className="border rounded-lg overflow-hidden table-shadow table-border bg-background">
                   <div className="relative overflow-hidden">
                     <div className="max-h-[75vh] overflow-auto scrollbar-thin">
@@ -618,7 +617,7 @@ export default function Page() {
                         
                         <tbody>
                           {isLoading ? (
-                            Array.from({ length: itemsPerPage }, (_, i) => (
+                            Array.from({ length: pageSize }, (_, i) => (
                               <tr key={i} className="border-b animate-pulse h-16">
                                 <td className="sticky left-0 z-10 w-[240px] p-3 bg-background border-r shadow-sm">
                                   <div className="flex items-center gap-3">
@@ -630,7 +629,7 @@ export default function Page() {
                                   </div>
                                 </td>
                                 
-                                {Array.from({ length: 11 }, (_, cellIndex) => (
+                                {Array.from({ length: 18 }, (_, cellIndex) => (
                                   <td key={cellIndex} className="p-2 text-center">
                                     <div className="h-3 w-8 bg-muted rounded mx-auto"></div>
                                   </td>
@@ -640,7 +639,7 @@ export default function Page() {
                           ) : (
                             currentTokens.map((token, index) => (
                               <TokenTableRow
-                                key={`${token.token_info.mint}-${token._updatedAt || 0}`}
+                                key={`${token.mint_address}-${token._updatedAt || 0}`}
                                 token={token}
                                 index={index}
                                 startIndex={startIndex}

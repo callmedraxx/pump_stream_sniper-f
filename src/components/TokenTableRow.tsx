@@ -41,23 +41,23 @@ export function TokenTableRow({
       {/* Fixed Token Cell */}
       <td className="sticky left-0 z-10 w-[220px] bg-background border-r shadow-sm">
         <a
-          href={`https://pump.fun/coin/${token.token_info.mint}`}
+          href={`https://pump.fun/coin/${token.mint_address}`}
           target="_blank"
           rel="noopener noreferrer"
           className={`block p-2 hover:bg-muted/50 transition-colors duration-200 cursor-pointer ${
             token._isUpdated ? 'bg-green-50 border-l-4 border-l-green-500 -ml-3 pl-3' : ''
           }`}
-          title={`Watch ${token.token_info.name || 'token'} live stream on Pump.fun`}
+          title={`Watch ${token.name || 'token'} live stream on Pump.fun`}
         >
           <div className="flex items-center gap-2">
             <span className="text-[11px] text-muted-foreground font-mono w-6">
               #{startIndex + index + 1}
             </span>
             <div className="h-6 w-6 rounded-full bg-muted flex-shrink-0 overflow-hidden">
-              {token.token_info.image_uri ? (
+              {token.image_url ? (
                 <img
-                  src={token.token_info.image_uri}
-                  alt={token.token_info.symbol}
+                  src={token.image_url}
+                  alt={token.symbol}
                   className="h-full w-full object-cover"
                   onError={(e) => {
                     const target = e.target as HTMLImageElement;
@@ -68,15 +68,15 @@ export function TokenTableRow({
                 />
               ) : null}
               <div className="fallback h-full w-full bg-gradient-to-br from-blue-400 to-purple-500 flex items-center justify-center text-white text-[11px] font-bold">
-                {token.token_info.symbol?.charAt(0) || '?'}
+                {token.symbol?.charAt(0) || '?'}
               </div>
             </div>
             <div className="min-w-0 flex-1">
               <div className="font-medium truncate text-[13px]">
-                {token.token_info.name ? (token.token_info.name.length > 22 ? token.token_info.name.slice(0,22) + '...' : token.token_info.name) : 'Unnamed Token'}
+                {token.name ? (token.name.length > 22 ? token.name.slice(0,22) + '...' : token.name) : 'Unnamed Token'}
               </div>
               <div className="text-[11px] text-muted-foreground truncate">
-                ${token.token_info.symbol || 'UNKNOWN'} • {token.token_info.mint ? `${token.token_info.mint.slice(0,6)}...${token.token_info.mint.slice(-4)}` : ''}
+                ${token.symbol || 'UNKNOWN'} • {token.mint_address ? `${token.mint_address.slice(0,6)}...${token.mint_address.slice(-4)}` : ''}
               </div>
               {/* Buy / Sell buttons under the symbol */}
               <div className="mt-1 flex items-center gap-2">
@@ -115,7 +115,7 @@ export function TokenTableRow({
       {/* Graph - small sparkline using candle_data when available */}
       <td className="w-[80px] p-2 text-center">
         {(() => {
-          const rawCandles = (token.trading_info as any)?.candle_data ?? (token.raw_data as any)?.candle_data
+          const rawCandles = (token.candle_data as any) ?? (token.raw_data as any)?.candle_data
           if (!rawCandles || !Array.isArray(rawCandles) || rawCandles.length === 0) {
             return (
               <div className="h-8 w-12 bg-muted/30 rounded flex items-center justify-center text-[10px] text-muted-foreground mx-auto">
@@ -165,7 +165,7 @@ export function TokenTableRow({
       {/* Age */}
       <td className="w-[70px] p-2 text-center">
         <LiveAge 
-          createdFormatted={token.creator_info.created_formatted || 'Unknown'}
+          createdFormatted={token.age || token.created_at || 'Unknown'}
           className="text-xs"
         />
       </td>
@@ -173,8 +173,8 @@ export function TokenTableRow({
       {/* MCAP */}
       <td className="w-[90px] p-2 text-center">
         <AnimatedNumber
-          value={parseMarketCap(token.market_data.usd_market_cap)}
-          previousValue={token._previousValues?.usd_market_cap ? parseMarketCap(token._previousValues.usd_market_cap) : undefined}
+          value={parseMarketCap(token.mcap)}
+          previousValue={token._previousValues?.mcap ? parseMarketCap(token._previousValues.mcap) : undefined}
           formatFn={formatMarketCap}
           className="text-xs font-medium"
           duration={1200}
@@ -185,21 +185,21 @@ export function TokenTableRow({
       <td className="w-[80px] p-2">
         <div className="flex flex-col items-center justify-center space-y-1">
           <AnimatedNumber
-            value={parseMarketCap(token.market_data.ath || '0')}
+            value={parseMarketCap(token.ath || 0)}
             previousValue={token._previousValues?.ath ? parseMarketCap(token._previousValues.ath) : undefined}
             formatFn={formatMarketCap}
             className="text-xs font-medium text-white"
             duration={1200}
           />
-          {token.market_data.ath && token.market_data.progress_percentage && (
+          {token.ath && token.progress && (
             <div className="w-full px-1">
               <AnimatedProgress
-                value={token.market_data.progress_percentage}
-                previousValue={token._previousValues?.progress_percentage}
+                value={token.progress}
+                previousValue={token._previousValues?.progress}
                 duration={1500}
                 className="w-full"
-                currentMcap={parseFloat(token.market_data.usd_market_cap || '0')}
-                athMcap={parseFloat(token.market_data.ath || '0')}
+                currentMcap={parseFloat(String(token.mcap || 0))}
+                athMcap={parseFloat(String(token.ath || 0))}
               />
             </div>
           )}
@@ -209,7 +209,7 @@ export function TokenTableRow({
       {/* LIVE SINCE */}
       <td className="w-[90px] p-2 text-center">
         <LiveSince
-          createdFormatted={token.timestamps?.created_at}
+          createdFormatted={token.live_since || token.created_at || token.age}
           className="text-xs"
         />
       </td>
@@ -217,8 +217,8 @@ export function TokenTableRow({
       {/* Volume */}
       <td className="w-[80px] p-2 text-center">
         <AnimatedNumber
-          value={token.trading_info[`volume_${dataTimePeriod}` as keyof typeof token.trading_info] as number || 0}
-          previousValue={token._previousValues?.[`volume_${dataTimePeriod}` as keyof typeof token._previousValues] as number}
+          value={(token as any)[`volume_${dataTimePeriod}`] as number || 0}
+          previousValue={(token._previousValues as any)?.[`volume_${dataTimePeriod}`] as number}
           formatFn={formatVolume}
           className="text-xs"
           duration={1000}
@@ -227,9 +227,9 @@ export function TokenTableRow({
       
       {/* Transactions */}
       <td className="w-[70px] p-2 text-center">
-        <AnimatedNumber
-          value={token.trading_info[`txns_${dataTimePeriod}` as keyof typeof token.trading_info] as number || 0}
-          previousValue={token._previousValues?.[`txns_${dataTimePeriod}` as keyof typeof token._previousValues] as number}
+          <AnimatedNumber
+            value={(token as any)[`txns_${dataTimePeriod}`] as number || 0}
+            previousValue={(token._previousValues as any)?.[`txns_${dataTimePeriod}`] as number}
           formatFn={(value: number) => value.toLocaleString()}
           className="text-xs"
           duration={1000}
@@ -238,9 +238,9 @@ export function TokenTableRow({
       
       {/* Traders */}
       <td className="w-[80px] p-2 text-center">
-        <AnimatedNumber
-          value={token.trading_info[`traders_${dataTimePeriod}` as keyof typeof token.trading_info] as number || 0}
-          previousValue={token._previousValues?.[`traders_${dataTimePeriod}` as keyof typeof token._previousValues] as number}
+          <AnimatedNumber
+            value={(token as any)[`traders_${dataTimePeriod}`] as number || 0}
+            previousValue={(token._previousValues as any)?.[`traders_${dataTimePeriod}`] as number}
           formatFn={(value: number) => value.toLocaleString()}
           className="text-xs"
           duration={1000}
@@ -249,9 +249,9 @@ export function TokenTableRow({
       
       {/* Price Change */}
       <td className="w-[90px] p-2 text-center">
-        <AnimatedPercentage
-          value={token.trading_info[`price_change_${dataTimePeriod}` as keyof typeof token.trading_info] as number || 0}
-          previousValue={token._previousValues?.[`price_change_${dataTimePeriod}` as keyof typeof token._previousValues] as number}
+          <AnimatedPercentage
+            value={(token as any)[`price_change_${dataTimePeriod}`] as number || 0}
+            previousValue={(token._previousValues as any)?.[`price_change_${dataTimePeriod}`] as number}
           className="text-xs"
           duration={1000}
         />
@@ -262,7 +262,7 @@ export function TokenTableRow({
         <div className="flex flex-col items-center justify-center gap-0.5">
           {/* Viewers count */}
           <AnimatedNumber
-            value={token.activity_info.viewers || 0}
+            value={token.viewers || 0}
             previousValue={token._previousValues?.viewers}
             formatFn={(value: number) => value.toLocaleString()}
             className="text-xs font-medium"
@@ -270,7 +270,7 @@ export function TokenTableRow({
           />
           {/* Reply count - smaller and muted */}
           <AnimatedNumber
-            value={token.pool_info.reply_count || 0}
+            value={token.reply_count || 0}
             previousValue={token._previousValues?.reply_count}
             formatFn={(value: number) => `${value.toLocaleString()}💬`}
             className="text-[10px] text-muted-foreground"
@@ -283,13 +283,13 @@ export function TokenTableRow({
       <td className="w-[100px] p-2 text-center">
         <div className="flex flex-col items-center justify-center gap-1">
           <span className="text-[10px] font-mono text-muted-foreground">
-            {token.creator_info.creator ? 
-              `${token.creator_info.creator.slice(0, 4)}...${token.creator_info.creator.slice(-4)}` 
+            {token.creator ? 
+              `${token.creator.slice(0, 4)}...${token.creator.slice(-4)}` 
               : 'Unknown'}
           </span>
           {persistentSort.sortBy === 'creator' && (
             <span className="text-[8px] px-1 py-0.5 bg-blue-500/20 text-blue-600 rounded-full border border-blue-500/30">
-              {getCreatorCount(token.creator_info.creator || 'Unknown')} tokens
+              {getCreatorCount(token.creator || 'Unknown')} tokens
             </span>
           )}
         </div>
@@ -298,11 +298,11 @@ export function TokenTableRow({
       {/* GMGN */}
       <td className="w-[80px] p-2 text-center">
         <a
-          href={`https://gmgn.ai/sol/token/${token.token_info.mint}`}
+          href={`https://gmgn.ai/sol/token/${token.mint_address}`}
           target="_blank"
           rel="noopener noreferrer"
           className="text-blue-500 hover:text-blue-600 text-[10px] font-medium transition-colors duration-200 truncate block"
-          title={`View ${token.token_info.symbol || 'token'} on GMGN`}
+          title={`View ${token.symbol || 'token'} on GMGN`}
         >
           gmgn.ai
         </a>
@@ -311,7 +311,9 @@ export function TokenTableRow({
       {/* Socials */}
       <td className="w-[80px] p-2 text-center">
         {(() => {
-          const social = token.social_links ?? (token.raw_data as any)?.social_links ?? {}
+          const social = (token.twitter || token.website || token.telegram)
+            ? { twitter: token.twitter, website: token.website, telegram: token.telegram }
+            : (token.raw_data as any)?.social_links || {}
           return (
             <div className="flex justify-center gap-1">
               {social.twitter && (
@@ -355,7 +357,7 @@ export function TokenTableRow({
       {/* Dev Buy */}
       <td className="w-[90px] p-2 text-center">
         {(() => {
-          const dev = (token.activity_info as any)?.dev_activity ?? (token.raw_data as any)?.dev_activity
+          const dev = (token.dev_activity as any) ?? (token.raw_data as any)?.dev_activity
           if (!dev || dev.type !== 'buy') return <span className="text-[10px] text-muted-foreground">-</span>
           const amountSOL = dev.amountSOL ?? dev.amountSol ?? dev.amount_sol ?? 0
           return (
@@ -367,7 +369,7 @@ export function TokenTableRow({
       {/* Dev Buy Since */}
       <td className="w-[100px] p-2 text-center">
         {(() => {
-          const dev = (token.activity_info as any)?.dev_activity ?? (token.raw_data as any)?.dev_activity
+          const dev = (token.dev_activity as any) ?? (token.raw_data as any)?.dev_activity
           if (!dev || dev.type !== 'buy') return <span className="text-[10px] text-muted-foreground">-</span>
           return (
             <LiveSince createdFormatted={dev.timestamp || dev.time || dev.ts} className="text-[10px]" />
@@ -378,7 +380,7 @@ export function TokenTableRow({
       {/* Dev Sell */}
       <td className="w-[90px] p-2 text-center">
         {(() => {
-          const dev = (token.activity_info as any)?.dev_activity ?? (token.raw_data as any)?.dev_activity
+          const dev = (token.dev_activity as any) ?? (token.raw_data as any)?.dev_activity
           if (!dev || dev.type !== 'sell') return <span className="text-[10px] text-muted-foreground">-</span>
           const amountSOL = dev.amountSOL ?? dev.amountSol ?? dev.amount_sol ?? 0
           return (
@@ -390,7 +392,7 @@ export function TokenTableRow({
       {/* Dev Sell Since */}
       <td className="w-[100px] p-2 text-center">
         {(() => {
-          const dev = (token.activity_info as any)?.dev_activity ?? (token.raw_data as any)?.dev_activity
+          const dev = (token.dev_activity as any) ?? (token.raw_data as any)?.dev_activity
           if (!dev || dev.type !== 'sell') return <span className="text-[10px] text-muted-foreground">-</span>
           return (
             <LiveSince createdFormatted={dev.timestamp || dev.time || dev.ts} className="text-[10px]" />
@@ -400,8 +402,8 @@ export function TokenTableRow({
       
       {/* Created Count */}
       <td className="w-[80px] p-2 text-center">
-        {(() => {
-          const count = (token.activity_info as any)?.created_coin_count ?? (token.raw_data as any)?.created_coin_count
+          {(() => {
+          const count = token.created_coin_count ?? (token.raw_data as any)?.created_coin_count
           return count ? <span className="text-[10px] font-medium">{count}</span> : <span className="text-[10px] text-muted-foreground">-</span>
         })()}
       </td>

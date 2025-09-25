@@ -74,191 +74,137 @@ export function applyFilters(tokens: LiveToken[], filters: FilterPreferences | n
     if (!t) return false
 
     if (filters.minViewers != null) {
-      const viewers = t.activity_info?.viewers ?? 0
+      const viewers = t.viewers ?? 0
       if (viewers < filters.minViewers) return false
     }
 
     if (filters.maxViewers != null) {
-      const viewers = t.activity_info?.viewers ?? 0
+      const viewers = t.viewers ?? 0
       if (viewers > filters.maxViewers) return false
     }
 
     if (filters.minTraders != null) {
-      const traders = (t.trading_info?.traders_24h ?? t.trading_info?.traders_1h ?? 0) as number
+      const traders = (t.traders_24h ?? t.traders_1h ?? 0) as number
       if (traders < filters.minTraders) return false
     }
 
     if (filters.maxTraders != null) {
-      const traders = (t.trading_info?.traders_24h ?? t.trading_info?.traders_1h ?? 0) as number
+      const traders = (t.traders_24h ?? t.traders_1h ?? 0) as number
       if (traders > filters.maxTraders) return false
     }
 
     if (filters.minUsdMarketCap != null) {
-      const usdStr = t.market_data?.usd_market_cap ?? t.trading_info?.usd_market_cap ?? t.market_data?.market_cap
-      const marketCap = parseUsdMarketCap(usdStr)
+      const marketCap = parseUsdMarketCap(t.mcap ?? 0)
       if (marketCap < filters.minUsdMarketCap) return false
     }
 
     if (filters.maxUsdMarketCap != null) {
-      const usdStr = t.market_data?.usd_market_cap ?? t.trading_info?.usd_market_cap ?? t.market_data?.market_cap
-      const marketCap = parseUsdMarketCap(usdStr)
+      const marketCap = parseUsdMarketCap(t.mcap ?? 0)
       if (marketCap > filters.maxUsdMarketCap) return false
     }
 
     if (filters.minVolume24h != null) {
-      const vol = (t.trading_info?.volume_24h ?? t.trading_info?.volume_1h ?? 0) as number
+      const vol = (t.volume_24h ?? t.volume_1h ?? 0) as number
       if (vol < filters.minVolume24h) return false
     }
 
     if (filters.maxVolume24h != null) {
-      const vol = (t.trading_info?.volume_24h ?? t.trading_info?.volume_1h ?? 0) as number
+      const vol = (t.volume_24h ?? t.volume_1h ?? 0) as number
       if (vol > filters.maxVolume24h) return false
     }
 
     if (filters.minTxns24h != null) {
-      const txns = (t.trading_info?.txns_24h ?? t.trading_info?.txns_1h ?? 0) as number
+      const txns = (t.txns_24h ?? t.txns_1h ?? 0) as number
       if (txns < filters.minTxns24h) return false
     }
 
     if (filters.maxTxns24h != null) {
-      const txns = (t.trading_info?.txns_24h ?? t.trading_info?.txns_1h ?? 0) as number
+      const txns = (t.txns_24h ?? t.txns_1h ?? 0) as number
       if (txns > filters.maxTxns24h) return false
     }
 
+    // Helper: normalize created time into seconds
+    const getCreatedSeconds = (token: LiveToken): number | undefined => {
+      // Prefer explicit ISO created_at string
+      if (token.created_at) {
+        const ms = parseFormattedAge(token.created_at)
+        if (ms) return Math.floor(ms / 1000)
+      }
+
+      // Fallback to age string
+      if (token.age) {
+        const ms = parseFormattedAge(token.age)
+        if (ms) return Math.floor(ms / 1000)
+      }
+
+      return undefined
+    }
+
     if (filters.minAgeDays != null) {
-      let created: number | undefined
-
-      // Debug: log what we're working with
-      console.log('Age filter debug for token:', t.token_info?.symbol, {
-        created_timestamp: t.activity_info?.created_timestamp,
-        created_formatted: t.activity_info?.created_formatted,
-        creator_created_formatted: t.creator_info?.created_formatted,
-        timestamps: t.timestamps
-      })
-
-      // Try created_timestamp first (Unix timestamp number)
-      created = t.activity_info?.created_timestamp as number | undefined
-
-      // Fallback to parsing created_formatted string
-      if (!created) {
-        const createdFormatted = t.activity_info?.created_formatted as string | undefined
-        if (createdFormatted) {
-          created = parseFormattedAge(createdFormatted)
-          console.log('Parsed from activity_info.created_formatted:', createdFormatted, '->', created)
-        }
-      }
-
-      // Another fallback to creator_info.created_formatted
-      if (!created) {
-        const createdFormatted = t.creator_info?.created_formatted as string | undefined
-        if (createdFormatted) {
-          created = parseFormattedAge(createdFormatted)
-          console.log('Parsed from creator_info.created_formatted:', createdFormatted, '->', created)
-        }
-      }
-
-      // Final fallback: try parsing timestamps.created_at if it's a string
-      if (!created && t.timestamps?.created_at) {
-        if (typeof t.timestamps.created_at === 'string') {
-          created = parseFormattedAge(t.timestamps.created_at)
-          console.log('Parsed from timestamps.created_at:', t.timestamps.created_at, '->', created)
-        } else if (typeof t.timestamps.created_at === 'number') {
-          created = t.timestamps.created_at
-          console.log('Used timestamps.created_at as number:', created)
-        }
-      }
-
-      if (!created || created === 0) {
-        console.log('No valid created timestamp found, filtering out token')
-        return false
-      }
-
+      const created = getCreatedSeconds(t)
+      if (!created || created === 0) return false
       const ageDays = (nowSec - created) / 86400
-      console.log('Calculated age:', ageDays, 'days, filter min:', filters.minAgeDays)
       if (ageDays < filters.minAgeDays) return false
     }
 
     if (filters.maxAgeDays != null) {
-      let created: number | undefined
-      
-      // Try created_timestamp first (Unix timestamp number)
-      created = t.activity_info?.created_timestamp as number | undefined
-      
-      // Fallback to parsing created_formatted string
-      if (!created) {
-        const createdFormatted = t.activity_info?.created_formatted as string | undefined
-        if (createdFormatted) {
-          created = parseFormattedAge(createdFormatted)
-        }
-      }
-      
-      // Another fallback to creator_info.created_formatted
-      if (!created) {
-        const createdFormatted = t.creator_info?.created_formatted as string | undefined
-        if (createdFormatted) {
-          created = parseFormattedAge(createdFormatted)
-        }
-      }
-      
+      const created = getCreatedSeconds(t)
       if (!created || created === 0) return false
-      
       const ageDays = (nowSec - created) / 86400
       if (ageDays > filters.maxAgeDays) return false
     }
 
     if (filters.creatorContains != null && filters.creatorContains.trim() !== '') {
-      const creator = (t.creator_info?.creator || t.activity_info?.creator || '').toString().toLowerCase()
+      const creator = (t.creator || '').toString().toLowerCase()
       if (!creator.includes(filters.creatorContains.toString().toLowerCase())) return false
     }
 
     // Developer filters
     if (filters.minCreatedCount != null) {
-      const created = (t.activity_info?.created_coin_count ?? (t.creator_info as any)?.created_count ?? (t.creator_info as any)?.created_coin_count) as number | undefined
+      const created = (t.created_coin_count ?? 0) as number | undefined
       if (!created || created < filters.minCreatedCount) return false
     }
 
     if (filters.maxCreatedCount != null) {
-      const created = (t.activity_info?.created_coin_count ?? (t.creator_info as any)?.created_count ?? (t.creator_info as any)?.created_coin_count) as number | undefined
+      const created = (t.created_coin_count ?? 0) as number | undefined
       if (created && created > filters.maxCreatedCount) return false
     }
 
     if (filters.minCreatorBalanceSol != null) {
-      const sol = (t.activity_info?.creator_balance_sol ?? (t.creator_info as any)?.creator_balance_sol) as number | undefined
+      const sol = (t.creator_balance_sol ?? 0) as number | undefined
       if (!sol || sol < filters.minCreatorBalanceSol) return false
     }
 
     if (filters.maxCreatorBalanceSol != null) {
-      const sol = (t.activity_info?.creator_balance_sol ?? (t.creator_info as any)?.creator_balance_sol) as number | undefined
+      const sol = (t.creator_balance_sol ?? 0) as number | undefined
       if (sol && sol > filters.maxCreatorBalanceSol) return false
     }
 
     if (filters.minCreatorBalanceUsd != null) {
-      const usd = (t.activity_info?.creator_balance_usd ?? (t.creator_info as any)?.creator_balance_usd) as number | undefined
+      const usd = (t.creator_balance_usd ?? 0) as number | undefined
       if (!usd || usd < filters.minCreatorBalanceUsd) return false
     }
 
     if (filters.maxCreatorBalanceUsd != null) {
-      const usd = (t.activity_info?.creator_balance_usd ?? (t.creator_info as any)?.creator_balance_usd) as number | undefined
+      const usd = (t.creator_balance_usd ?? 0) as number | undefined
       if (usd && usd > filters.maxCreatorBalanceUsd) return false
     }
 
     if (filters.hasTelegram === true) {
       const raw = (t.raw_data as any) ?? {}
-      const social = t.social_links ?? raw.social_links ?? {}
-      const telegram = social.telegram ?? raw.telegram
+      const telegram = t.telegram ?? raw.telegram
       if (!telegram) return false
     }
 
     if (filters.hasSocials === true) {
       const raw = (t.raw_data as any) ?? {}
-      const social = t.social_links ?? raw.social_links ?? {}
-      const hasAnySocial = social.twitter || social.website || social.telegram
+      const hasAnySocial = (t.twitter || t.website || t.telegram) || raw.twitter || raw.website || raw.telegram
       if (!hasAnySocial) return false
     }
 
     if (filters.mcapNearAthPercent != null && filters.mcapNearAthPercent > 0) {
-      const currentMcap = parseUsdMarketCap(t.market_data?.usd_market_cap ?? t.trading_info?.usd_market_cap ?? t.market_data?.market_cap)
-      const athMcap = parseUsdMarketCap(t.market_data?.ath ?? t.trading_info?.price_change_24h ?? null)
+  const currentMcap = parseUsdMarketCap(t.mcap ?? 0)
+  const athMcap = parseUsdMarketCap(t.ath ?? 0)
       
       if (currentMcap <= 0 || athMcap <= 0) return false
       
@@ -267,11 +213,11 @@ export function applyFilters(tokens: LiveToken[], filters: FilterPreferences | n
     }
 
     // Determine migratedness
-    const vol = (t.trading_info?.volume_24h ?? t.trading_info?.volume_1h ?? 0) as number
-    const txns = (t.trading_info?.txns_24h ?? t.trading_info?.txns_1h ?? 0) as number
-    const traders = (t.trading_info?.traders_24h ?? t.trading_info?.traders_1h ?? 0) as number
-    const complete = (t.pool_info?.complete) as boolean | undefined
-    const athStr = t.market_data?.ath ?? t.trading_info?.price_change_24h ?? null
+  const vol = (t.volume_24h ?? t.volume_1h ?? 0) as number
+  const txns = (t.txns_24h ?? t.txns_1h ?? 0) as number
+  const traders = (t.traders_24h ?? t.traders_1h ?? 0) as number
+  const complete = t.complete as boolean | undefined
+  const athStr = t.ath ?? null
   const ath = parseUsdMarketCap(athStr)
   // migrated tokens: pool marked complete === true and ATH greater than 100,000
   const isMigrated = (complete === true) && ath > 100000
@@ -311,68 +257,64 @@ export function applyNotificationFilters(token: LiveToken, filters: FilterPrefer
 
   // Apply notification filters
   if (filters.notifyMinViewers != null) {
-    const viewers = token.activity_info?.viewers ?? 0
+    const viewers = token.viewers ?? 0
     if (viewers < filters.notifyMinViewers) return false
   }
 
   if (filters.notifyMaxViewers != null) {
-    const viewers = token.activity_info?.viewers ?? 0
+    const viewers = token.viewers ?? 0
     if (viewers > filters.notifyMaxViewers) return false
   }
 
   if (filters.notifyMinTraders != null) {
-    const traders = (token.trading_info?.traders_24h ?? token.trading_info?.traders_1h ?? 0) as number
+    const traders = (token.traders_24h ?? token.traders_1h ?? 0) as number
     if (traders < filters.notifyMinTraders) return false
   }
 
   if (filters.notifyMaxTraders != null) {
-    const traders = (token.trading_info?.traders_24h ?? token.trading_info?.traders_1h ?? 0) as number
+    const traders = (token.traders_24h ?? token.traders_1h ?? 0) as number
     if (traders > filters.notifyMaxTraders) return false
   }
 
   if (filters.notifyMinUsdMarketCap != null) {
-    const usdStr = token.market_data?.usd_market_cap ?? token.trading_info?.usd_market_cap ?? token.market_data?.market_cap
-    const marketCap = parseUsdMarketCap(usdStr)
+    const marketCap = parseUsdMarketCap(token.mcap ?? 0)
     if (marketCap < filters.notifyMinUsdMarketCap) return false
   }
 
   if (filters.notifyMaxUsdMarketCap != null) {
-    const usdStr = token.market_data?.usd_market_cap ?? token.trading_info?.usd_market_cap ?? token.market_data?.market_cap
-    const marketCap = parseUsdMarketCap(usdStr)
+    const marketCap = parseUsdMarketCap(token.mcap ?? 0)
     if (marketCap > filters.notifyMaxUsdMarketCap) return false
   }
 
   if (filters.notifyMinVolume24h != null) {
-    const vol = (token.trading_info?.volume_24h ?? token.trading_info?.volume_1h ?? 0) as number
+    const vol = (token.volume_24h ?? token.volume_1h ?? 0) as number
     if (vol < filters.notifyMinVolume24h) return false
   }
 
   if (filters.notifyMaxVolume24h != null) {
-    const vol = (token.trading_info?.volume_24h ?? token.trading_info?.volume_1h ?? 0) as number
+    const vol = (token.volume_24h ?? token.volume_1h ?? 0) as number
     if (vol > filters.notifyMaxVolume24h) return false
   }
 
   if (filters.notifyMinTxns24h != null) {
-    const txns = (token.trading_info?.txns_24h ?? token.trading_info?.txns_1h ?? 0) as number
+    const txns = (token.txns_24h ?? token.txns_1h ?? 0) as number
     if (txns < filters.notifyMinTxns24h) return false
   }
 
   if (filters.notifyMaxTxns24h != null) {
-    const txns = (token.trading_info?.txns_24h ?? token.trading_info?.txns_1h ?? 0) as number
+    const txns = (token.txns_24h ?? token.txns_1h ?? 0) as number
     if (txns > filters.notifyMaxTxns24h) return false
   }
 
   if (filters.notifyHasSocials === true) {
     const raw = (token.raw_data as any) ?? {}
-    const social = token.social_links ?? raw.social_links ?? {}
-    const hasAnySocial = social.twitter || social.website || social.telegram
+    const hasAnySocial = (token.twitter || token.website || token.telegram) || raw.twitter || raw.website || raw.telegram
     if (!hasAnySocial) return false
   }
 
   if (filters.notifyHasTelegram === true) {
     const raw = (token.raw_data as any) ?? {}
-    const social = token.social_links ?? raw.social_links ?? {}
-    const telegram = social.telegram ?? raw.telegram
+    const telegram = token.telegram ?? raw.telegram
     if (!telegram) return false
   }
 
