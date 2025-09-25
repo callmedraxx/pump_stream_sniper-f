@@ -29,7 +29,7 @@ const TokenBox: React.FC<TokenBoxProps> = ({
   rank
 }) => {
   return (
-    <Card className="relative overflow-hidden hover:shadow-md transition-all duration-200 border-2 hover:border-primary/20 group rounded-2xl">
+    <Card className="relative overflow-hidden mb-6 hover:shadow-md transition-all duration-200 border-2 hover:border-primary/20 group rounded-2xl">
       <CardContent className="p-3">
         {/* Header with rank and image */}
         <div className="flex items-start justify-between mb-3">
@@ -108,7 +108,7 @@ const TokenBox: React.FC<TokenBoxProps> = ({
               previousValue={token._previousValues?.mcap ? parseMarketCap(token._previousValues.mcap as any) : undefined}
               formatFn={formatMarketCap}
               className="text-[12px] font-medium"
-              duration={1200}
+              duration={3000}
             />
           </div>
 
@@ -120,7 +120,7 @@ const TokenBox: React.FC<TokenBoxProps> = ({
                 previousValue={token._previousValues?.ath ? parseMarketCap(token._previousValues.ath as any) : undefined}
                 formatFn={formatMarketCap}
                 className="text-[12px] font-medium"
-                duration={1200}
+                duration={3000}
               />
             </div>
           </div>
@@ -131,7 +131,7 @@ const TokenBox: React.FC<TokenBoxProps> = ({
               <AnimatedProgress
                 value={token.progress}
                 previousValue={token._previousValues?.progress}
-                duration={1500}
+                duration={3000}
                 className="w-full h-1.5"
                 currentMcap={Number(token.mcap || 0)}
                 athMcap={Number(token.ath || 0)}
@@ -147,7 +147,7 @@ const TokenBox: React.FC<TokenBoxProps> = ({
                 value={(token as any)[`volume_${dataTimePeriod}`] as number || 0}
                 previousValue={(token._previousValues as any)?.[`volume_${dataTimePeriod}`] as number}
                 formatFn={formatVolume}
-                duration={1000}
+                duration={3000}
               />
             </div>
             
@@ -157,7 +157,7 @@ const TokenBox: React.FC<TokenBoxProps> = ({
                 value={(token as any)[`txns_${dataTimePeriod}`] as number || 0}
                 previousValue={(token._previousValues as any)?.[`txns_${dataTimePeriod}`] as number}
                 formatFn={(value: number) => value.toLocaleString()}
-                duration={1000}
+                duration={3000}
               />
             </div>
 
@@ -167,7 +167,7 @@ const TokenBox: React.FC<TokenBoxProps> = ({
                 value={(token as any)[`traders_${dataTimePeriod}`] as number || 0}
                 previousValue={(token._previousValues as any)?.[`traders_${dataTimePeriod}`] as number}
                 formatFn={(value: number) => value.toLocaleString()}
-                duration={1000}
+                duration={3000}
               />
             </div>
 
@@ -176,7 +176,7 @@ const TokenBox: React.FC<TokenBoxProps> = ({
               <AnimatedPercentage
                 value={(token as any)[`price_change_${dataTimePeriod}`] as number || 0}
                 previousValue={(token._previousValues as any)?.[`price_change_${dataTimePeriod}`] as number}
-                duration={1000}
+                duration={3000}
               />
             </div>
           </div>
@@ -235,14 +235,14 @@ const TokenBox: React.FC<TokenBoxProps> = ({
                   previousValue={token._previousValues?.viewers}
                   formatFn={(value: number) => value.toLocaleString()}
                   className="text-xs font-medium"
-                  duration={1000}
+                  duration={3000}
                 />
               <AnimatedNumber
                   value={token.reply_count || 0}
                   previousValue={token._previousValues?.reply_count}
                   formatFn={(value: number) => `${value}💬`}
                   className="text-xs text-muted-foreground"
-                  duration={1000}
+                  duration={3000}
               />
             </div>
           </div>
@@ -394,7 +394,7 @@ const TokenSection: React.FC<SectionProps> = ({
   searchPlaceholder = "Search tokens..."
 }) => {
   const [searchQuery, setSearchQuery] = useState('')
-  const gridContainerRef = useRef<HTMLDivElement>(null)
+  const gridContainerRef = useRef<HTMLDivElement | null>(null)
 
   const filteredTokens = useMemo(() => {
     if (!searchQuery.trim()) return tokens
@@ -407,15 +407,6 @@ const TokenSection: React.FC<SectionProps> = ({
       return symbol.includes(query) || name.includes(query) || mint.includes(query)
     })
   }, [tokens, searchQuery])
-
-  // Grid virtualization
-  const gridVirtualizer = useVirtualizer({
-    count: filteredTokens.length,
-    getScrollElement: () => gridContainerRef.current,
-    estimateSize: () => 320, // Estimated card height
-    overscan: 4,
-    horizontal: false,
-  })
 
   return (
     <div className="space-y-4">
@@ -440,47 +431,66 @@ const TokenSection: React.FC<SectionProps> = ({
         </div>
       </div>
 
-      {/* Virtualized Token Grid */}
-      <div 
+      {/* Virtualized Token Grid: render rows where each row contains two
+          TokenBox components (two columns). This reduces DOM nodes while
+          keeping the 2-per-row layout. */}
+      <div
         ref={gridContainerRef}
-        className="max-h-[600px] overflow-auto scrollbar-thin"
-        style={{
-          height: '600px',
-        }}
+        className="max-h-[600px] overflow-auto scrollbar-thin mb-6"
+        style={{ height: '600px' }}
       >
-        <div 
-          className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4"
-          style={{
-            height: `${gridVirtualizer.getTotalSize()}px`,
-            position: 'relative',
-          }}
-        >
-          {gridVirtualizer.getVirtualItems().map((virtualItem) => {
-            const token = filteredTokens[virtualItem.index]
-            return (
-              <div
-            key={token.mint_address}
-                style={{
-                  position: 'absolute',
-                  top: 0,
-                  left: 0,
-                  width: '100%',
-                  height: `${virtualItem.size}px`,
-                  transform: `translateY(${virtualItem.start}px)`,
-                }}
-              >
-                <TokenBox
-                  token={token}
-                  dataTimePeriod={dataTimePeriod}
-                  onBuy={onBuy}
-                  onSell={onSell}
-                  selectedQuickSellPercent={selectedQuickSellPercent}
-                  rank={virtualItem.index + 1}
-                />
-              </div>
-            )
-          })}
-        </div>
+        {(() => {
+          const rowCount = Math.max(1, Math.ceil(filteredTokens.length / 2))
+          const rowVirtualizer = useVirtualizer({
+            count: rowCount,
+            getScrollElement: () => gridContainerRef.current,
+            estimateSize: () => 500,
+            overscan: 4,
+            horizontal: false,
+          })
+
+          return (
+            <div style={{ height: `${rowVirtualizer.getTotalSize()}px`, position: 'relative' }}>
+              {rowVirtualizer.getVirtualItems().map((virtualRow) => {
+                const rowIndex = virtualRow.index
+                const i = rowIndex * 2
+                return (
+                  <div
+                    key={rowIndex}
+                    style={{
+                      position: 'absolute',
+                      top: 0,
+                      left: 0,
+                      width: '100%',
+                      height: `${virtualRow.size}px`,
+                      transform: `translateY(${virtualRow.start}px)`,
+                    }}
+                  >
+                    <div className="grid grid-cols-2 gap-3 mb-6">
+                      {[0, 1].map((col) => {
+                        const idx = i + col
+                        const token = filteredTokens[idx]
+                        return token ? (
+                          <TokenBox
+                            key={token.mint_address}
+                            token={token}
+                            dataTimePeriod={dataTimePeriod}
+                            onBuy={onBuy}
+                            onSell={onSell}
+                            selectedQuickSellPercent={selectedQuickSellPercent}
+                            rank={idx + 1}
+                          />
+                        ) : (
+                          <div key={`empty-${rowIndex}-${col}`} />
+                        )
+                      })}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          )
+        })()}
       </div>
     </div>
   )
@@ -531,38 +541,46 @@ export const BoxedViewLayout: React.FC<BoxedViewLayoutProps> = ({
 
   return (
     <div className="space-y-8">
-      {/* Latest Live Tokens Section */}
-      <TokenSection
-        title="New Tokens"
-        tokens={latestTokens}
-        dataTimePeriod={dataTimePeriod}
-        onBuy={onBuy}
-        onSell={onSell}
-        selectedQuickSellPercent={selectedQuickSellPercent}
-        searchPlaceholder="Search new tokens..."
-      />
+      {/* On larger screens show three columns (one per category). Each
+          TokenSection internally uses a two-column grid for token boxes,
+          producing 6 boxes per full-width row (3 sections × 2 boxes). */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div>
+          <TokenSection
+            title="New Live"
+            tokens={latestTokens}
+            dataTimePeriod={dataTimePeriod}
+            onBuy={onBuy}
+            onSell={onSell}
+            selectedQuickSellPercent={selectedQuickSellPercent}
+            searchPlaceholder="Search new tokens..."
+          />
+        </div>
 
-      {/* Top Market Cap Section */}
-      <TokenSection
-        title="Top by Market Cap"
-        tokens={topMarketCapTokens}
-        dataTimePeriod={dataTimePeriod}
-        onBuy={onBuy}
-        onSell={onSell}
-        selectedQuickSellPercent={selectedQuickSellPercent}
-        searchPlaceholder="Search by market cap..."
-      />
+        <div>
+          <TokenSection
+            title="Market Cap"
+            tokens={topMarketCapTokens}
+            dataTimePeriod={dataTimePeriod}
+            onBuy={onBuy}
+            onSell={onSell}
+            selectedQuickSellPercent={selectedQuickSellPercent}
+            searchPlaceholder="Search by market cap..."
+          />
+        </div>
 
-      {/* Migrated Tokens Section */}
-      <TokenSection
-        title="Migrated Tokens"
-        tokens={migratedTokens}
-        dataTimePeriod={dataTimePeriod}
-        onBuy={onBuy}
-        onSell={onSell}
-        selectedQuickSellPercent={selectedQuickSellPercent}
-        searchPlaceholder="Search migrated tokens..."
-      />
+        <div>
+          <TokenSection
+            title="Migrated"
+            tokens={migratedTokens}
+            dataTimePeriod={dataTimePeriod}
+            onBuy={onBuy}
+            onSell={onSell}
+            selectedQuickSellPercent={selectedQuickSellPercent}
+            searchPlaceholder="Search migrated tokens..."
+          />
+        </div>
+      </div>
     </div>
   )
 }

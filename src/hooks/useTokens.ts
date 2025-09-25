@@ -1,6 +1,7 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import supabase from '@/lib/supabase'
 import { transformBackendToken, mergeTokenWithChanges } from './socket-helpers'
+import tokenWorkerClient from '@/workers/tokenWorkerClient'
 import { LiveToken } from '@/types/token.types'
 
 // useTokens: fetch initial snapshot from Supabase and subscribe to realtime
@@ -9,20 +10,30 @@ export function useTokens() {
 
   useEffect(() => {
     let mounted = true
+    const tokensRef = { current: [] as LiveToken[] }
 
     async function fetchInitial() {
       try {
         const { data, error } = await supabase.from('tokens').select('*')
-        console.log('supabase fetch result', { data, error })
+        //console.log('supabase fetch result', { data, error })
         if (error) {
           console.error('supabase fetch error', error)
           return
         }
         if (!mounted) return
 
-        // transform each record into the canonical LiveToken shape
-        const transformed = (data as any[] || []).map((r) => transformBackendToken(r))
-        console.log('[fetchInitial] fetched tokens:', transformed)
+        // transform each record into the canonical LiveToken shape using worker when available
+        const records = (data as any[] || [])
+        let transformed: any[]
+        try {
+          transformed = await tokenWorkerClient.transformBatch(records)
+        } catch (e) {
+          //console.warn('worker transformBatch failed, falling back', e)
+          transformed = records.map((r) => transformBackendToken(r))
+        }
+        //console.log('[fetchInitial] fetched tokens:', transformed)
+        if (!mounted) return
+        tokensRef.current = transformed
         setTokens(transformed)
       } catch (e) {
         console.error('useTokens fetchInitial error', e)
@@ -33,53 +44,92 @@ export function useTokens() {
 
     // Realtime handler
     const handler = (payload: any) => {
-      console.log('[realtime payload]', payload)
+      //console.log('[realtime payload]', payload)
 
       const record = payload.new ?? payload.old
       if (!record) {
-        console.warn('[realtime] no record in payload')
+        //console.warn('[realtime] no record in payload')
         return
       }
 
-      const transformed = transformBackendToken(record)
-      console.log(`[realtime ${payload.eventType}] transformed:`, transformed)
-
-      setTokens((prev) => {
-        const idx = prev.findIndex(t => t.mint_address === transformed.mint_address)
-
-        if (payload.eventType === 'INSERT') {
-          console.log('[INSERT] adding token:', transformed)
-          return [transformed, ...prev]
+      // Transform on worker when possible (fast, off-main-thread)
+      ;(async () => {
+        let transformed: any
+        try {
+          transformed = (await tokenWorkerClient.transformBatch([record]))[0]
+        } catch (e) {
+          //console.warn('worker transform failed, fallback to local', e)
+          transformed = transformBackendToken(record)
         }
+        //console.log(`[realtime ${payload.eventType}] transformed:`, transformed)
 
-        if (payload.eventType === 'UPDATE') {
-          if (idx === -1) {
-            console.log('[UPDATE] token not found, inserting:', transformed)
-            return [transformed, ...prev]
-          }
-          const next = [...prev]
-          // Merge incoming transformed data into existing token using the
-          // mergeTokenWithChanges helper so we don't overwrite previously
-          // stored nested fields when the Supabase UPDATE payload is partial.
-          next[idx] = mergeTokenWithChanges(next[idx], transformed)
-          console.log('[UPDATE] merged token at index', idx, '->', next[idx])
-          return next
+        // Synchronous mutations for INSERT/DELETE can be applied immediately
+        if (payload.eventType === 'INSERT') {
+          setTokens((prev) => {
+            const next = [transformed, ...prev]
+            tokensRef.current = next
+            return next
+          })
+          return
         }
 
         if (payload.eventType === 'DELETE') {
-          if (idx === -1) {
-            console.log('[DELETE] token not found, ignoring')
-            return prev
-          }
-          const next = [...prev]
-          next.splice(idx, 1)
-          console.log('[DELETE] removed token at index', idx)
-          return next
+          setTokens((prev) => {
+            const idx = prev.findIndex(t => t.mint_address === transformed.mint_address)
+            if (idx === -1) return prev
+            const next = [...prev]
+            next.splice(idx, 1)
+            tokensRef.current = next
+            return next
+          })
+          return
         }
 
-        console.log('[realtime] unhandled eventType:', payload.eventType)
-        return prev
-      })
+        if (payload.eventType === 'UPDATE') {
+          // Attempt to merge using worker; fall back to main-thread merge
+          setTokens((prev) => {
+            const idx = prev.findIndex(t => t.mint_address === transformed.mint_address)
+            if (idx === -1) {
+              const next = [transformed, ...prev]
+              tokensRef.current = next
+              return next
+            }
+
+            // Optimistically leave prev unchanged and request worker merge
+            // to compute merged object. We'll update state when merge completes.
+            (async () => {
+              try {
+                const merged = await tokenWorkerClient.merge(prev[idx], transformed)
+                // Ensure we don't clobber newer updates: compare by mint_address and updatedAt
+                setTokens((current) => {
+                  const at = current.findIndex(t => t.mint_address === merged.mint_address)
+                  if (at === -1) return current
+                  const copy = [...current]
+                  copy[at] = merged
+                  tokensRef.current = copy
+                  return copy
+                })
+              } catch (e) {
+                //console.warn('worker merge failed, using local merge', e)
+                const mergedLocal = mergeTokenWithChanges(prev[idx], transformed)
+                setTokens((current) => {
+                  const at = current.findIndex(t => t.mint_address === mergedLocal.mint_address)
+                  if (at === -1) return current
+                  const copy = [...current]
+                  copy[at] = mergedLocal
+                  tokensRef.current = copy
+                  return copy
+                })
+              }
+            })()
+
+            return prev
+          })
+          return
+        }
+
+        //console.log('[realtime] unhandled eventType:', payload.eventType)
+      })()
     }
 
     // Subscribe to realtime changes on the tokens table
@@ -88,7 +138,7 @@ export function useTokens() {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'tokens' }, handler)
 
     channel.subscribe((status) => {
-      console.log('[subscription status]', status)
+      //console.log('[subscription status]', status)
       if (status !== 'SUBSCRIBED') {
         console.warn('[subscription] not ready:', status)
       }
@@ -97,7 +147,7 @@ export function useTokens() {
     return () => {
       mounted = false
       try {
-        console.log('[cleanup] unsubscribing channel')
+        //console.log('[cleanup] unsubscribing channel')
         channel.unsubscribe()
       } catch (e) {
         console.error('[cleanup] unsubscribe error', e)

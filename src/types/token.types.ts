@@ -137,6 +137,7 @@ export interface LiveToken {
     price_change_6h?: number
     price_change_24h?: number
     viewers?: number
+    created_coin_count?: number
   }
 }
 

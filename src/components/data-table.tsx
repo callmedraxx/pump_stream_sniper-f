@@ -49,6 +49,7 @@ import {
   useReactTable,
   VisibilityState,
 } from "@tanstack/react-table"
+import { useVirtualizer } from '@tanstack/react-virtual'
 import { Area, AreaChart, CartesianGrid, XAxis } from "recharts"
 import { toast } from "sonner"
 import { z } from "zod"
@@ -365,6 +366,9 @@ export function DataTable({
     [data]
   )
 
+  // Ref for the scrollable table container (virtualizer will observe this)
+  const tableScrollRef = React.useRef<HTMLDivElement | null>(null)
+
   const table = useReactTable({
     data,
     columns,
@@ -389,6 +393,20 @@ export function DataTable({
     getFacetedRowModel: getFacetedRowModel(),
     getFacetedUniqueValues: getFacetedUniqueValues(),
   })
+
+  // Current page rows (after filtering/sorting/pagination)
+  const pageRows = table.getRowModel().rows || []
+
+  // Virtualizer: virtualize the paginated rows (so pagination still controls which items are visible)
+  const rowHeightEstimate = 56 // px - tweak if your rows are taller/shorter
+  const virtualizer = useVirtualizer({
+    count: pageRows.length,
+    getScrollElement: () => tableScrollRef.current,
+    estimateSize: () => rowHeightEstimate,
+    overscan: 6,
+  })
+  const virtualItems = virtualizer.getVirtualItems()
+  const totalSize = virtualizer.getTotalSize()
 
   function handleDragEnd(event: DragEndEvent) {
     const { active, over } = event
@@ -477,9 +495,10 @@ export function DataTable({
       </div>
       <TabsContent
         value="outline"
-        className="relative flex flex-col gap-4 overflow-auto px-4 lg:px-6"
+        className="relative flex flex-col gap-4 px-4 lg:px-6"
       >
-        <div className="overflow-hidden rounded-lg border">
+        {/* Make the table wrapper scrollable so the virtualizer can measure and control visible rows. */}
+        <div ref={tableScrollRef} className="rounded-lg border overflow-auto max-h-[60vh]">
           <DndContext
             collisionDetection={closestCenter}
             modifiers={[restrictToVerticalAxis]}
@@ -507,14 +526,32 @@ export function DataTable({
                 ))}
               </TableHeader>
               <TableBody className="**:data-[slot=table-cell]:first:w-8">
-                {table.getRowModel().rows?.length ? (
+                {pageRows?.length ? (
                   <SortableContext
-                    items={dataIds}
+                    items={pageRows.map(r => r.id)}
                     strategy={verticalListSortingStrategy}
                   >
-                    {table.getRowModel().rows.map((row) => (
-                      <DraggableRow key={row.id} row={row} />
-                    ))}
+                    {/* If virtualization found items, render spacer rows + virtual rows, otherwise render all page rows */}
+                    {virtualItems.length > 0 ? (
+                      <>
+                        {/* top spacer */}
+                        <TableRow style={{ height: `${virtualItems[0].start}px` }}>
+                          <TableCell colSpan={columns.length} className="p-0 m-0 border-0" />
+                        </TableRow>
+
+                        {virtualItems.map((vi) => {
+                          const row = pageRows[vi.index]
+                          return <DraggableRow key={row.id} row={row} />
+                        })}
+
+                        {/* bottom spacer */}
+                        <TableRow style={{ height: `${Math.max(0, totalSize - (virtualItems[virtualItems.length - 1]?.end ?? 0))}px` }}>
+                          <TableCell colSpan={columns.length} className="p-0 m-0 border-0" />
+                        </TableRow>
+                      </>
+                    ) : (
+                      pageRows.map((row) => <DraggableRow key={row.id} row={row} />)
+                    )}
                   </SortableContext>
                 ) : (
                   <TableRow>

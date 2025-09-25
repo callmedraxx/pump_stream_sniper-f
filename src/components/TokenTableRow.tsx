@@ -1,5 +1,6 @@
 "use client"
 
+import React from 'react'
 import { LiveToken, SortPreferences } from "@/types/token.types"
 import { formatMarketCap, formatVolume, parseMarketCap } from "@/utils/format.utils"
 import { LiveAge } from "./LiveAge"
@@ -32,11 +33,40 @@ export function TokenTableRow({
   onSell,
   selectedQuickSellPercent,
 }: TokenTableRowProps) {
+  // Local UI state to briefly show update highlight even when _isUpdated
+  // may be toggled by incoming realtime events. We show the green
+  // highlight for a short duration (500ms) so animations still play but
+  // the row doesn't remain highlighted.
+  const [showHighlight, setShowHighlight] = React.useState<boolean>(false)
+
+  React.useEffect(() => {
+    if (token._isUpdated) {
+      setShowHighlight(true)
+      const t = setTimeout(() => setShowHighlight(false), 500)
+      return () => clearTimeout(t)
+    }
+    // If token._isUpdated becomes false, ensure highlight is cleared
+    setShowHighlight(false)
+  }, [token._isUpdated])
+
+  // Shake on insert: when a token is newly inserted we expect no
+  // _previousValues; trigger a short 200ms shake animation.
+  const [shake, setShake] = React.useState(false)
+  React.useEffect(() => {
+    const isInsert = !!token._isUpdated && !token._previousValues
+    if (isInsert) {
+      setShake(true)
+      const t = setTimeout(() => setShake(false), 200)
+      return () => clearTimeout(t)
+    }
+    setShake(false)
+  }, [token._isUpdated, token._previousValues])
+
   return (
     <tr 
       className={`border-b hover:bg-muted/30 transition-colors duration-300 h-16 ${
-        token._isUpdated ? 'bg-green-50/30' : ''
-      }`}
+        showHighlight ? 'bg-green-50/30' : ''
+      } ${shake ? 'row-shake' : ''}`}
     >
       {/* Fixed Token Cell */}
       <td className="sticky left-0 z-10 w-[220px] bg-background border-r shadow-sm">
@@ -177,7 +207,7 @@ export function TokenTableRow({
           previousValue={token._previousValues?.mcap ? parseMarketCap(token._previousValues.mcap) : undefined}
           formatFn={formatMarketCap}
           className="text-xs font-medium"
-          duration={1200}
+          duration={3000}
         />
       </td>
       
@@ -189,14 +219,14 @@ export function TokenTableRow({
             previousValue={token._previousValues?.ath ? parseMarketCap(token._previousValues.ath) : undefined}
             formatFn={formatMarketCap}
             className="text-xs font-medium text-white"
-            duration={1200}
+            duration={3000}
           />
           {token.ath && token.progress && (
             <div className="w-full px-1">
               <AnimatedProgress
                 value={token.progress}
                 previousValue={token._previousValues?.progress}
-                duration={1500}
+                duration={3000}
                 className="w-full"
                 currentMcap={parseFloat(String(token.mcap || 0))}
                 athMcap={parseFloat(String(token.ath || 0))}
@@ -221,7 +251,7 @@ export function TokenTableRow({
           previousValue={(token._previousValues as any)?.[`volume_${dataTimePeriod}`] as number}
           formatFn={formatVolume}
           className="text-xs"
-          duration={1000}
+          duration={3000}
         />
       </td>
       
@@ -232,7 +262,7 @@ export function TokenTableRow({
             previousValue={(token._previousValues as any)?.[`txns_${dataTimePeriod}`] as number}
           formatFn={(value: number) => value.toLocaleString()}
           className="text-xs"
-          duration={1000}
+          duration={3000}
         />
       </td>
       
@@ -243,7 +273,7 @@ export function TokenTableRow({
             previousValue={(token._previousValues as any)?.[`traders_${dataTimePeriod}`] as number}
           formatFn={(value: number) => value.toLocaleString()}
           className="text-xs"
-          duration={1000}
+          duration={3000}
         />
       </td>
       
@@ -253,7 +283,7 @@ export function TokenTableRow({
             value={(token as any)[`price_change_${dataTimePeriod}`] as number || 0}
             previousValue={(token._previousValues as any)?.[`price_change_${dataTimePeriod}`] as number}
           className="text-xs"
-          duration={1000}
+          duration={3000}
         />
       </td>
       
@@ -266,7 +296,7 @@ export function TokenTableRow({
             previousValue={token._previousValues?.viewers}
             formatFn={(value: number) => value.toLocaleString()}
             className="text-xs font-medium"
-            duration={1000}
+            duration={3000}
           />
           {/* Reply count - smaller and muted */}
           <AnimatedNumber
@@ -274,7 +304,7 @@ export function TokenTableRow({
             previousValue={token._previousValues?.reply_count}
             formatFn={(value: number) => `${value.toLocaleString()}💬`}
             className="text-[10px] text-muted-foreground"
-            duration={1000}
+            duration={3000}
           />
         </div>
       </td>
@@ -360,8 +390,16 @@ export function TokenTableRow({
           const dev = (token.dev_activity as any) ?? (token.raw_data as any)?.dev_activity
           if (!dev || dev.type !== 'buy') return <span className="text-[10px] text-muted-foreground">-</span>
           const amountSOL = dev.amountSOL ?? dev.amountSol ?? dev.amount_sol ?? 0
+          const prevDev = (token._previousValues as any)?.dev_activity as any
+          const prevAmount = prevDev ? (prevDev.amountSOL ?? prevDev.amountSol ?? prevDev.amount_sol ?? 0) : undefined
           return (
-            <div className="text-[10px]">{Number(amountSOL).toFixed(2)} SOL</div>
+            <AnimatedNumber
+              value={Number(amountSOL)}
+              previousValue={prevAmount}
+              formatFn={(v: number) => `${Number(v).toFixed(2)} SOL`}
+              className="text-[10px]"
+              duration={3000}
+            />
           )
         })()}
       </td>
@@ -383,8 +421,16 @@ export function TokenTableRow({
           const dev = (token.dev_activity as any) ?? (token.raw_data as any)?.dev_activity
           if (!dev || dev.type !== 'sell') return <span className="text-[10px] text-muted-foreground">-</span>
           const amountSOL = dev.amountSOL ?? dev.amountSol ?? dev.amount_sol ?? 0
+          const prevDev = (token._previousValues as any)?.dev_activity as any
+          const prevAmount = prevDev ? (prevDev.amountSOL ?? prevDev.amountSol ?? prevDev.amount_sol ?? 0) : undefined
           return (
-            <div className="text-[10px]">{Number(amountSOL).toFixed(2)} SOL</div>
+            <AnimatedNumber
+              value={Number(amountSOL)}
+              previousValue={prevAmount}
+              formatFn={(v: number) => `${Number(v).toFixed(2)} SOL`}
+              className="text-[10px]"
+              duration={3000}
+            />
           )
         })()}
       </td>
@@ -404,7 +450,16 @@ export function TokenTableRow({
       <td className="w-[80px] p-2 text-center">
           {(() => {
           const count = token.created_coin_count ?? (token.raw_data as any)?.created_coin_count
-          return count ? <span className="text-[10px] font-medium">{count}</span> : <span className="text-[10px] text-muted-foreground">-</span>
+          const prevCount = token._previousValues?.created_coin_count
+          return count ? (
+            <AnimatedNumber
+              value={Number(count)}
+              previousValue={prevCount}
+              formatFn={(v: number) => Number(v).toLocaleString()}
+              className="text-[10px] font-medium"
+              duration={3000}
+            />
+          ) : <span className="text-[10px] text-muted-foreground">-</span>
         })()}
       </td>
     </tr>

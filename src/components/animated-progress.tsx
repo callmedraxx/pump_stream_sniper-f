@@ -84,6 +84,14 @@ export function AnimatedProgress({
     return false
   }
 
+  const isLargeNearAth = () => {
+    // Strong flame only for tokens with meaningful market cap (>= 20k)
+    if (!currentMcap || !athMcap || athMcap <= 0) return false
+    if (currentMcap < 20000) return false
+    const percentFromAth = ((athMcap - currentMcap) / athMcap) * 100
+    return percentFromAth <= 2 // within 2% of ATH
+  }
+
   return (
     <div className={`space-y-1 ${className}`}>
       <div className="relative">
@@ -91,29 +99,28 @@ export function AnimatedProgress({
           value={Math.min(currentValue, 100)} 
           className={`h-2`}
         />
-        <div 
-          className={`absolute inset-0 h-2 ${getProgressColor(currentValue)} rounded-full overflow-hidden`}
-          style={{ 
-            width: `${Math.min(currentValue, 100)}%`,
-            background: `linear-gradient(90deg, ${
-              currentValue >= 80 ? '#22c55e' :
-              currentValue >= 50 ? '#eab308' : '#ef4444'
-            }, ${
-              currentValue >= 80 ? '#16a34a' :
-              currentValue >= 50 ? '#ca8a04' : '#dc2626'
-            })`
-          }}
-        >
-          {/* Enhanced sparkle indicator */}
+        <div className={`absolute inset-0 h-2 rounded-full overflow-hidden`}>
+          <div
+            className={`${getProgressColor(currentValue)} h-full rounded-full`}
+            style={{
+              width: `${Math.min(currentValue, 100)}%`,
+              background: `linear-gradient(90deg, ${
+                currentValue >= 80 ? '#22c55e' :
+                currentValue >= 50 ? '#eab308' : '#ef4444'
+              }, ${
+                currentValue >= 80 ? '#16a34a' :
+                currentValue >= 50 ? '#ca8a04' : '#dc2626'
+              })`
+            }}
+          />
+
+          {/* Enhanced sparkle indicator rendered above the fill (right edge) */}
           {shouldSparkle() && (
             <div
               className="absolute right-0 top-1/2 -translate-y-1/2 mr-[-8px] pointer-events-none"
               style={{ transform: 'translateY(-50%)' }}
             >
-              {/* Multiple sparkle effects for ATH proximity */}
-              {currentMcap && athMcap && athMcap > 0 && 
-               ((athMcap - currentMcap) / athMcap) * 100 <= 5 ? (
-                // Enhanced sparkle for near-ATH tokens
+              {currentMcap && athMcap && athMcap > 0 && ((athMcap - currentMcap) / athMcap) * 100 <= 5 ? (
                 <div className="relative">
                   <div className="animate-ping absolute inset-0 rounded-full bg-yellow-400 opacity-75"></div>
                   <div className="animate-pulse absolute inset-0 rounded-full bg-yellow-300 opacity-50"></div>
@@ -125,7 +132,6 @@ export function AnimatedProgress({
                   </svg>
                 </div>
               ) : (
-                // Regular sparkle for progress extremes
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className="animate-sparkle">
                   <path d="M12 2l1.9 4.2L18 8l-4.2 1.9L12 14l-1.9-4.1L6 8l4.1-1.8L12 2z" fill="white" opacity="0.95" />
                   <circle cx="12" cy="12" r="10" stroke="rgba(255,255,255,0.15)" />
@@ -134,6 +140,18 @@ export function AnimatedProgress({
             </div>
           )}
         </div>
+
+        {/* Harsh flame overlay for large tokens near ATH (mcap >= 20k and within 2% of ATH) */}
+        {isLargeNearAth() && (
+          <div className="absolute inset-0 pointer-events-none overflow-visible flame-overlay">
+            <div className="flame-container pointer-events-none">
+              <div className="flame flame-1"></div>
+              <div className="flame flame-2"></div>
+              <div className="flame flame-3"></div>
+              <div className="flame-glow"></div>
+            </div>
+          </div>
+        )}
       </div>
       {showPercentage && (
         <div className="text-xs text-center text-muted-foreground">
