@@ -38,7 +38,15 @@ export function AnimatedNumber({
   useEffect(() => {
     const startValue = currentValueRef.current
     const endValue = value
-    if (startValue === endValue) return
+    // If values are exactly equal, don't animate — ensure state is correct
+    if (startValue === endValue) {
+      if (currentValueRef.current !== endValue) {
+        setCurrentValue(endValue)
+        currentValueRef.current = endValue
+      }
+      setIsAnimating(false)
+      return
+    }
 
     setIsAnimating(true)
     const startTime = Date.now()
@@ -86,6 +94,13 @@ export function AnimatedNumber({
   }
 
   const getColorClass = () => {
+    // If the previous value (when provided) is exactly the same as the new value,
+    // don't apply any color highlight — no point flashing green/red for equal values.
+    if (previousValue !== undefined && previousValue === value) return ""
+
+    // If previousValue isn't provided, compare against the current displayed value
+    if (previousValue === undefined && currentValueRef.current === value) return ""
+
     const hasChanged = value !== currentValueRef.current
     if (!isAnimating && !hasChanged) return ""
     if (isIncreasing) return "text-green-500"

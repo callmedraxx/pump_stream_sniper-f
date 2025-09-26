@@ -29,10 +29,15 @@ export function AnimatedProgress({
   const animationRef = useRef<number | null>(null)
 
   useEffect(() => {
-    // Always animate when the target value changes, even for small differences
-    // Use a small threshold to avoid unnecessary animations for tiny changes
+    // If start and end are exactly equal, no animation is needed
+    if (currentValue === value) {
+      setIsAnimating(false)
+      return
+    }
+
+    // Otherwise animate when the target value changes, using a small threshold
     const valueDiff = Math.abs(value - currentValue)
-    if (valueDiff > 0.01) { // Changed from strict equality to allow small changes
+    if (valueDiff > 0.01) {
       setIsAnimating(true)
       const startValue = currentValue
       const endValue = value
