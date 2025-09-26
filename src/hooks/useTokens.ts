@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import supabase from '@/lib/supabase'
-import { transformBackendToken, mergeTokenWithChanges } from './socket-helpers'
+import { transformBackendToken, mergeTokenWithChanges, normalizeMint } from './socket-helpers'
 import tokenWorkerClient from '@/workers/tokenWorkerClient'
 import { LiveToken } from '@/types/token.types'
 
@@ -66,8 +66,9 @@ export function useTokens() {
         // Synchronous mutations for INSERT/DELETE can be applied immediately
         if (payload.eventType === 'INSERT') {
           setTokens((prev) => {
-            // Prevent duplicate mints: if present, merge instead of inserting new
-            const existIdx = prev.findIndex(t => t.mint_address === transformed.mint_address)
+            // Prevent duplicate mints: normalize for comparison only, preserve original in state
+            const normalizedMint = normalizeMint(transformed.mint_address)
+            const existIdx = prev.findIndex(t => normalizeMint(t.mint_address) === normalizedMint)
             if (existIdx !== -1) {
               const merged = mergeTokenWithChanges(prev[existIdx], transformed)
               const copy = [...prev]
@@ -84,7 +85,8 @@ export function useTokens() {
 
         if (payload.eventType === 'DELETE') {
           setTokens((prev) => {
-            const idx = prev.findIndex(t => t.mint_address === transformed.mint_address)
+            const normalizedMint = normalizeMint(transformed.mint_address)
+            const idx = prev.findIndex(t => normalizeMint(t.mint_address) === normalizedMint)
             if (idx === -1) return prev
             const next = [...prev]
             next.splice(idx, 1)
@@ -97,7 +99,8 @@ export function useTokens() {
         if (payload.eventType === 'UPDATE') {
           // Attempt to merge using worker; fall back to main-thread merge
           setTokens((prev) => {
-            const idx = prev.findIndex(t => t.mint_address === transformed.mint_address)
+            const normalizedMint = normalizeMint(transformed.mint_address)
+            const idx = prev.findIndex(t => normalizeMint(t.mint_address) === normalizedMint)
             if (idx === -1) {
               const next = [transformed, ...prev]
               tokensRef.current = next
@@ -111,7 +114,8 @@ export function useTokens() {
                 const merged = await tokenWorkerClient.merge(prev[idx], transformed)
                 // Ensure we don't clobber newer updates: compare by mint_address and updatedAt
                 setTokens((current) => {
-                  const at = current.findIndex(t => t.mint_address === merged.mint_address)
+                  const normalizedMergedMint = normalizeMint(merged.mint_address)
+                  const at = current.findIndex(t => normalizeMint(t.mint_address) === normalizedMergedMint)
                   if (at === -1) return current
                   const copy = [...current]
                   copy[at] = merged
@@ -122,7 +126,8 @@ export function useTokens() {
                 //console.warn('worker merge failed, using local merge', e)
                 const mergedLocal = mergeTokenWithChanges(prev[idx], transformed)
                 setTokens((current) => {
-                  const at = current.findIndex(t => t.mint_address === mergedLocal.mint_address)
+                  const normalizedLocalMint = normalizeMint(mergedLocal.mint_address)
+                  const at = current.findIndex(t => normalizeMint(t.mint_address) === normalizedLocalMint)
                   if (at === -1) return current
                   const copy = [...current]
                   copy[at] = mergedLocal

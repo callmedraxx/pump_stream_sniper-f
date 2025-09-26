@@ -42,8 +42,7 @@ const normalizeCandleData = (raw, maxPoints = 100) => {
 }
 
 const transformBackendToken = (backendToken) => {
-  const rawMint = backendToken.mint_address || backendToken.raw_data?.mint_address || backendToken.raw?.mint_address || null
-  const tokenMint = typeof rawMint === 'string' ? rawMint.trim().toLowerCase() : rawMint
+  const tokenMint = backendToken.mint_address || backendToken.raw_data?.mint_address || backendToken.raw?.mint_address || null
   const rawCandleData = backendToken.candle_data ?? null
   const candle_data = normalizeCandleData(rawCandleData, 200)
 

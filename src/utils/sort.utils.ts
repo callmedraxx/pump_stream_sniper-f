@@ -7,12 +7,24 @@ import { parseFormattedAge } from "./time.utils"
  */
 export const sortByAge = (tokens: LiveToken[], order: 'asc' | 'desc'): LiveToken[] => {
   return [...tokens].sort((a, b) => {
-    // Normalize created times using created_at or age
+    // Normalize times using `age` (preferred - Supabase timestamp) then `created_at`
     const getTime = (t: LiveToken) => {
-      let ts = 0
-      if (t.created_at) ts = parseFormattedAge(t.created_at)
-      if (!ts && t.age) ts = parseFormattedAge(t.age)
-      return ts
+      const ageVal = t.age ?? null
+      // If age is a number (seconds or ms), convert to ms
+      if (typeof ageVal === 'number' && ageVal > 0) {
+        return ageVal < 1e12 ? ageVal * 1000 : ageVal
+      }
+
+      // If age is a string (ISO or relative), parse via parseFormattedAge
+      if (typeof ageVal === 'string' && ageVal.trim() !== '') {
+        return parseFormattedAge(ageVal)
+      }
+
+      // Fallback to created_at if age missing
+      const created = t.created_at ?? null
+      if (typeof created === 'number' && created > 0) return created < 1e12 ? created * 1000 : created
+      if (typeof created === 'string' && created.trim() !== '') return parseFormattedAge(created)
+      return 0
     }
 
     const aTime = getTime(a)
@@ -131,8 +143,17 @@ export const sortByCreator = (tokens: LiveToken[], order: 'asc' | 'desc'): LiveT
     const creatorTokens = tokens
       .filter(token => (token.creator || 'Unknown') === creator)
       .sort((a, b) => {
-        const aTime = parseFormattedAge(a.created_at || a.age || '')
-        const bTime = parseFormattedAge(b.created_at || b.age || '')
+        const getTimeFor = (t: LiveToken) => {
+          const ageVal = t.age ?? null
+          if (typeof ageVal === 'number' && ageVal > 0) return ageVal < 1e12 ? ageVal * 1000 : ageVal
+          if (typeof ageVal === 'string' && ageVal.trim() !== '') return parseFormattedAge(ageVal)
+          const created = t.created_at ?? null
+          if (typeof created === 'number' && created > 0) return created < 1e12 ? created * 1000 : created
+          if (typeof created === 'string' && created.trim() !== '') return parseFormattedAge(created)
+          return 0
+        }
+        const aTime = getTimeFor(a)
+        const bTime = getTimeFor(b)
         return bTime - aTime // Newest first within each creator group
       })
     groupedTokens.push(...creatorTokens)
@@ -147,7 +168,7 @@ export const sortByCreator = (tokens: LiveToken[], order: 'asc' | 'desc'): LiveT
 export const sortByLiveSince = (tokens: LiveToken[], order: 'asc' | 'desc'): LiveToken[] => {
   const normalize = (t: LiveToken) => {
     // Prefer created_at (could be ISO string or numeric seconds/ms) then live_since/age
-    const created = t.created_at ?? t.live_since ?? t.age ?? null
+    const created = t.created_at ?? t.live_since ?? null
     if (!created) return 0
 
     if (typeof created === 'string') {

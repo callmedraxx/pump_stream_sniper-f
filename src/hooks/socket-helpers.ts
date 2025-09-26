@@ -1,6 +1,11 @@
 // Shared parsing and transform helpers for SSE/WebSocket hooks
 import { parseFormattedAge } from '../utils/time.utils'
 
+// Helper to normalize mint addresses for comparison only (not storage)
+export const normalizeMint = (mint: string | null | undefined): string => {
+  return typeof mint === 'string' ? mint.trim().toLowerCase() : ''
+}
+
 export const parseFormattedNumber = (value: any, debugContext?: string): number => {
   if (value === null || value === undefined || value === '') return 0
   if (typeof value === 'number') return isNaN(value) ? 0 : value
@@ -44,8 +49,7 @@ const normalizeCandleData = (raw: any, maxPoints = 100) => {
 
 export const transformBackendToken = (backendToken: any): any => {
   // Robust mint extraction: check common variants and nested raw payloads
-  const rawMint = backendToken.mint_address || backendToken.raw_data?.mint_address || backendToken.raw?.mint_address || null
-  const tokenMint = typeof rawMint === 'string' ? rawMint.trim().toLowerCase() : rawMint
+  const tokenMint = backendToken.mint_address || backendToken.raw_data?.mint_address || backendToken.raw?.mint_address || null
   const debugPrefix = `Token ${String(tokenMint || 'unknown').slice(0,8)}`
   if (!tokenMint) {
     // Helpful debug when backend payload lacks a mint (causes empty GMGN links)
