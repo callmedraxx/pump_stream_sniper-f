@@ -17,7 +17,7 @@ export function useTokens() {
         const { data, error } = await supabase.from('tokens').select('*')
         //console.log('supabase fetch result', { data, error })
         if (error) {
-          console.error('supabase fetch error', error)
+          //console.error('supabase fetch error', error)
           return
         }
         if (!mounted) return
@@ -44,7 +44,7 @@ export function useTokens() {
 
     // Realtime handler
     const handler = (payload: any) => {
-      console.log('[realtime payload]', payload)
+      // console.log('[realtime payload]', payload)
 
       const record = payload.new ?? payload.old
       if (!record) {
@@ -61,7 +61,7 @@ export function useTokens() {
           //console.warn('worker transform failed, fallback to local', e)
           transformed = transformBackendToken(record)
         }
-        console.log(`[realtime ${payload.eventType}] transformed:`, transformed)
+        // console.log(`[realtime ${payload.eventType}] transformed:`, transformed)
 
         // Synchronous mutations for INSERT/DELETE can be applied immediately
         if (payload.eventType === 'INSERT') {
@@ -119,7 +119,7 @@ export function useTokens() {
                   return copy
                 })
               } catch (e) {
-                console.warn('worker merge failed, using local merge', e)
+                //console.warn('worker merge failed, using local merge', e)
                 const mergedLocal = mergeTokenWithChanges(prev[idx], transformed)
                 setTokens((current) => {
                   const at = current.findIndex(t => t.mint_address === mergedLocal.mint_address)
@@ -147,7 +147,7 @@ export function useTokens() {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'tokens' }, handler)
 
     channel.subscribe((status) => {
-      console.log('[subscription status]', status)
+      // console.log('[subscription status]', status)
       if (status !== 'SUBSCRIBED') {
         console.warn('[subscription] not ready:', status)
       }
@@ -156,7 +156,7 @@ export function useTokens() {
     return () => {
       mounted = false
       try {
-        //console.log('[cleanup] unsubscribing channel')
+        console.log('[cleanup] unsubscribing channel')
         channel.unsubscribe()
       } catch (e) {
         console.error('[cleanup] unsubscribe error', e)
