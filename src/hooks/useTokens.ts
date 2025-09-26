@@ -44,11 +44,11 @@ export function useTokens() {
 
     // Realtime handler
     const handler = (payload: any) => {
-      //console.log('[realtime payload]', payload)
+      console.log('[realtime payload]', payload)
 
       const record = payload.new ?? payload.old
       if (!record) {
-        //console.warn('[realtime] no record in payload')
+        console.warn('[realtime] no record in payload')
         return
       }
 
@@ -61,11 +61,20 @@ export function useTokens() {
           //console.warn('worker transform failed, fallback to local', e)
           transformed = transformBackendToken(record)
         }
-        //console.log(`[realtime ${payload.eventType}] transformed:`, transformed)
+        console.log(`[realtime ${payload.eventType}] transformed:`, transformed)
 
         // Synchronous mutations for INSERT/DELETE can be applied immediately
         if (payload.eventType === 'INSERT') {
           setTokens((prev) => {
+            // Prevent duplicate mints: if present, merge instead of inserting new
+            const existIdx = prev.findIndex(t => t.mint_address === transformed.mint_address)
+            if (existIdx !== -1) {
+              const merged = mergeTokenWithChanges(prev[existIdx], transformed)
+              const copy = [...prev]
+              copy[existIdx] = merged
+              tokensRef.current = copy
+              return copy
+            }
             const next = [transformed, ...prev]
             tokensRef.current = next
             return next
@@ -110,7 +119,7 @@ export function useTokens() {
                   return copy
                 })
               } catch (e) {
-                //console.warn('worker merge failed, using local merge', e)
+                console.warn('worker merge failed, using local merge', e)
                 const mergedLocal = mergeTokenWithChanges(prev[idx], transformed)
                 setTokens((current) => {
                   const at = current.findIndex(t => t.mint_address === mergedLocal.mint_address)
@@ -138,7 +147,7 @@ export function useTokens() {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'tokens' }, handler)
 
     channel.subscribe((status) => {
-      //console.log('[subscription status]', status)
+      console.log('[subscription status]', status)
       if (status !== 'SUBSCRIBED') {
         console.warn('[subscription] not ready:', status)
       }

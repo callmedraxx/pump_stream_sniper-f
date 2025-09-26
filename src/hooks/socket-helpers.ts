@@ -44,9 +44,8 @@ const normalizeCandleData = (raw: any, maxPoints = 100) => {
 
 export const transformBackendToken = (backendToken: any): any => {
   // Robust mint extraction: check common variants and nested raw payloads
-  const tokenMint = (
-    backendToken.mint_address
-  )
+  const rawMint = backendToken.mint_address || backendToken.raw_data?.mint_address || backendToken.raw?.mint_address || null
+  const tokenMint = typeof rawMint === 'string' ? rawMint.trim().toLowerCase() : rawMint
   const debugPrefix = `Token ${String(tokenMint || 'unknown').slice(0,8)}`
   if (!tokenMint) {
     // Helpful debug when backend payload lacks a mint (causes empty GMGN links)

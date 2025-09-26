@@ -42,7 +42,7 @@ export function TokenTableRow({
   React.useEffect(() => {
     if (token._isUpdated) {
       setShowHighlight(true)
-      const t = setTimeout(() => setShowHighlight(false), 500)
+      const t = setTimeout(() => setShowHighlight(false), 300)
       return () => clearTimeout(t)
     }
     // If token._isUpdated becomes false, ensure highlight is cleared
@@ -74,9 +74,7 @@ export function TokenTableRow({
           href={`https://pump.fun/coin/${token.mint_address}`}
           target="_blank"
           rel="noopener noreferrer"
-          className={`block p-2 hover:bg-muted/50 transition-colors duration-200 cursor-pointer ${
-            token._isUpdated ? 'bg-green-50 border-l-4 border-l-green-500 -ml-3 pl-3' : ''
-          }`}
+          className={`block p-2 hover:bg-muted/50 transition-colors duration-200 cursor-pointer ${showHighlight ? 'bg-green-50 border-l-4 border-l-green-500 -ml-3 pl-3' : ''}`}
           title={`Watch ${token.name || 'token'} live stream on Pump.fun`}
         >
           <div className="flex items-center gap-2">
@@ -102,7 +100,7 @@ export function TokenTableRow({
               </div>
             </div>
             <div className="min-w-0 flex-1">
-              <div className="font-medium truncate text-[13px]">
+              <div className={`font-medium truncate text-[13px] transition-colors duration-200 ${showHighlight ? 'text-black' : 'text-white'}`}>
                 {token.name ? (token.name.length > 22 ? token.name.slice(0,22) + '...' : token.name) : 'Unnamed Token'}
               </div>
               <div className="text-[11px] text-muted-foreground truncate">
